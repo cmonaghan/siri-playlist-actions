@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"text/template"
 
 	"github.com/gorilla/sessions"
 	"github.com/joho/godotenv"
@@ -47,8 +48,11 @@ func main() {
 
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/callback", callbackHandler)
-	http.HandleFunc("/current-song", currentSongHandler) // New /current-song handler
-	http.HandleFunc("/remove-song", validateAPIToken(removeSongFromPlaylist))
+	http.HandleFunc("/current-song", currentSongHandler)
+	http.HandleFunc("/setup", completeSetupHandler)
+
+	// Serve static files (e.g., images, stylesheets) from the "static" directory
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Start the server on localhost port 8080
 	log.Println("Starting server on :8080...")
@@ -86,8 +90,8 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	session.Values["refresh_token"] = token.RefreshToken
 	session.Save(r, w)
 
-	// Redirect the user to the /current-song endpoint
-	http.Redirect(w, r, "/current-song", http.StatusFound)
+	// Redirect the user to the /setup endpoint
+	http.Redirect(w, r, "/setup", http.StatusFound)
 }
 
 func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
@@ -131,6 +135,62 @@ func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
 	return &token, nil
 }
 
+func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
+	// Retrieve the access token from the session
+	session, _ := sessionStore.Get(r, "spotify-session")
+	accessToken := session.Values["access_token"]
+
+	// If no valid access token is found
+	if accessToken == nil {
+		http.Error(w, "No valid access token found", http.StatusUnauthorized)
+		return
+	}
+
+	// Define the template for the setup page
+	tmpl := `
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Complete Setup</title>
+		</head>
+		<body>
+			<h1>Spotify Setup Complete!</h1>
+			<p><b>Your Spotify access token is:</b></p>
+			<pre>{{.AccessToken}}</pre>
+			<p>Now, to use this token in Siri Shortcuts:</p>
+			<ol>
+				<li>Open the Shortcuts app on your iPhone.</li>
+				<li>Tap "+" in the upper right</li>
+				<li>Search for "Get Contents of URL"</li>
+				<li>Set the URL to <code>http://localhost:8080/current-song</code>.</li>
+				<li>Set "Method" to "POST"</li>
+				<li>Set "Headers" to Key=<code>Authorization</code> and Text=<code>Bearer {{.AccessToken}}</code></li>
+				<li>You can now use this Shortcut to check the current song!</li>
+			</ol>
+			<h2>Example</h2>
+			<img src="/static/example-shortcut.jpeg" alt="Apple Shortcut Example Setup" />
+		</body>
+		</html>
+	`
+
+	// Create a template and execute it
+	t, err := template.New("setup").Parse(tmpl)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing template: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Render the page with the access token
+	err = t.Execute(w, map[string]interface{}{
+		"AccessToken": accessToken,
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error rendering template: %s", err), http.StatusInternalServerError)
+	}
+}
+
 func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 	var accessToken string
 
@@ -168,9 +228,8 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":    "success",
-		"song_id":   songID,
-		"song_name": songName,
+		"status":       "success",
+		"current_song": songName,
 	})
 }
 
@@ -220,61 +279,6 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("could not find the song ID or name")
-}
-
-func validateAPIToken(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract the Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "Unauthorized: Missing or invalid Authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		// Validate the API token
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token != apiToken {
-			http.Error(w, "Unauthorized: Invalid API token", http.StatusUnauthorized)
-			return
-		}
-
-		// If valid, proceed to the next handler
-		next(w, r)
-	}
-}
-
-func removeSongFromPlaylist(w http.ResponseWriter, r *http.Request) {
-	// Get the session and access token
-	session, _ := sessionStore.Get(r, "spotify-session")
-	accessToken := session.Values["access_token"]
-	if accessToken == nil {
-		http.Error(w, "No valid access token found", http.StatusUnauthorized)
-		return
-	}
-
-	// Get the currently playing song's ID
-	songID, songName, err := getCurrentlyPlayingSong(accessToken.(string))
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
-		return
-	}
-
-	// If no song is currently playing
-	if songID == "" {
-		http.Error(w, "No song is currently playing", http.StatusNotFound)
-		return
-	}
-
-	// Simulate removing the song (you could remove it from a playlist here)
-	log.Printf("Currently playing song ID: %s", songID)
-
-	// Respond with success
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "success",
-		"message": fmt.Sprintf("Currently playing song ID: %s, with name: %s", songID, songName),
-	})
 }
 
 type SpotifyAccessToken struct {
