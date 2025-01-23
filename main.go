@@ -132,16 +132,27 @@ func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
 }
 
 func currentSongHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the session and access token
-	session, _ := sessionStore.Get(r, "spotify-session")
-	accessToken := session.Values["access_token"]
-	if accessToken == nil {
+	var accessToken string
+
+	// Check if the access token is provided in the Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		// Extract the token from the Authorization header
+		accessToken = strings.TrimPrefix(authHeader, "Bearer ")
+	} else {
+		// If the token is not in the header, fallback to the session store
+		session, _ := sessionStore.Get(r, "spotify-session")
+		accessToken = session.Values["access_token"].(string)
+	}
+
+	// If no valid access token is found
+	if accessToken == "" {
 		http.Error(w, "No valid access token found", http.StatusUnauthorized)
 		return
 	}
 
 	// Get the currently playing song's ID and name
-	songID, songName, err := getCurrentlyPlayingSong(accessToken.(string))
+	songID, songName, err := getCurrentlyPlayingSong(accessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
