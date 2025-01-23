@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // RequestBody is the structure for the incoming POST request
@@ -13,7 +14,32 @@ type RequestBody struct {
 	PlaylistID string `json:"playlist_id"`
 }
 
+// Define the API token (replace with your actual token)
+// TODO: read value from secrets store
+const apiToken = "your_api_token_here"
+
+// Middleware to check the Authorization header
+func authenticateRequest(r *http.Request) bool {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return false
+	}
+
+	// Check if the Authorization header starts with "Bearer " and validate the token
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == apiToken {
+		return true
+	}
+	return false
+}
+
 func removeSongFromPlaylist(w http.ResponseWriter, r *http.Request) {
+	// Authenticate the request
+	if !authenticateRequest(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Only accept POST requests
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
