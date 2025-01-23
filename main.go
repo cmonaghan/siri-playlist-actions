@@ -154,23 +154,63 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 			<meta charset="UTF-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1.0">
 			<title>Complete Setup</title>
+			<style>
+				body {
+					font-family: Arial, sans-serif;
+					margin: 20px;
+					line-height: 1.6;
+				}
+				pre {
+					background: #f4f4f4;
+					padding: 10px;
+					border: 1px solid #ddd;
+					border-radius: 5px;
+					font-size: 16px;
+					overflow-x: auto;
+				}
+				button {
+					background-color: #007BFF;
+					color: white;
+					border: none;
+					padding: 10px 15px;
+					font-size: 16px;
+					border-radius: 5px;
+					cursor: pointer;
+				}
+				button:hover {
+					background-color: #0056b3;
+				}
+				img {
+					margin-top: 20px;
+					max-width: 100%;
+				}
+			</style>
 		</head>
 		<body>
 			<h1>Spotify Setup Complete!</h1>
-			<p><b>Your Spotify access token is:</b></p>
-			<pre>{{.AccessToken}}</pre>
+			<p>Your Spotify access token is:</p>
+			<pre id="accessToken">{{.AccessToken}}</pre>
+			<button onclick="copyToken()">Copy Token</button>
 			<p>Now, to use this token in Siri Shortcuts:</p>
 			<ol>
 				<li>Open the Shortcuts app on your iPhone.</li>
-				<li>Tap "+" in the upper right</li>
-				<li>Search for "Get Contents of URL"</li>
+				<li>Tap "+" in the upper right.</li>
+				<li>Search for "Get Contents of URL".</li>
 				<li>Set the URL to <code>http://localhost:8080/current-song</code>.</li>
-				<li>Set "Method" to "POST"</li>
-				<li>Set "Headers" to Key=<code>Authorization</code> and Text=<code>Bearer {{.AccessToken}}</code></li>
+				<li>Set "Method" to "POST".</li>
+				<li>Set "Headers" to Key=<code>Authorization</code> and Text=<code>Bearer YOUR_ACCESS_TOKEN</code>.</li>
 				<li>You can now use this Shortcut to check the current song!</li>
 			</ol>
-			<h2>Example</h2>
 			<img src="/static/example-shortcut.jpeg" alt="Apple Shortcut Example Setup" />
+			<script>
+				function copyToken() {
+					// Get the token text
+					const token = document.getElementById("accessToken").innerText;
+					
+					// Copy the token to clipboard
+					navigator.clipboard.writeText(token);
+				}
+			</script>
 		</body>
 		</html>
 	`
@@ -211,8 +251,8 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the currently playing song's ID and name
-	songID, songName, err := getCurrentlyPlayingSong(accessToken)
+	// Get the currently playing song's ID, name, and artist
+	songID, songName, artistName, err := getCurrentlyPlayingSong(accessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
@@ -224,20 +264,20 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Display the currently playing song
+	// Display the currently playing song and artist
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":       "success",
 		"current_song": songName,
+		"artist_name":  artistName,
 	})
 }
 
-func getCurrentlyPlayingSong(accessToken string) (string, string, error) {
+func getCurrentlyPlayingSong(accessToken string) (string, string, string, error) {
 	// Make the API request to get the currently playing track
 	req, err := http.NewRequest("GET", spotifyAPIBaseURL+"/me/player/currently-playing", nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	// Set the Authorization header
@@ -247,38 +287,55 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	// Check if there is no track playing
 	if resp.StatusCode == 204 {
-		return "", "", nil // No track playing
+		return "", "", "", nil // No track playing
 	}
 
 	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	// Parse the currently playing track
 	var data map[string]interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	// Extract song ID and name
+	// Extract song ID, name, and artist name
+	var songID, songName, artistName string
+
 	if item, exists := data["item"].(map[string]interface{}); exists {
+		// Get the song ID and name
 		if id, exists := item["id"].(string); exists {
-			if name, exists := item["name"].(string); exists {
-				return id, name, nil
+			songID = id
+		}
+		if name, exists := item["name"].(string); exists {
+			songName = name
+		}
+
+		// Get the artist name
+		if artists, exists := item["artists"].([]interface{}); exists && len(artists) > 0 {
+			if firstArtist, ok := artists[0].(map[string]interface{}); ok {
+				if artistNameValue, exists := firstArtist["name"].(string); exists {
+					artistName = artistNameValue
+				}
 			}
 		}
 	}
 
-	return "", "", fmt.Errorf("could not find the song ID or name")
+	if songID == "" || songName == "" {
+		return "", "", "", fmt.Errorf("could not find the song ID or name")
+	}
+
+	return songID, songName, artistName, nil
 }
 
 type SpotifyAccessToken struct {
