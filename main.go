@@ -5,14 +5,32 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"text/template"
+	"time"
 
-	"github.com/gorilla/sessions"
 	"github.com/joho/godotenv"
+)
+
+type TokenData struct {
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
+}
+
+type SpotifyAccessToken struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+var (
+	apiKeys    = make(map[string]*TokenData)
+	apiKeysMux sync.Mutex
 )
 
 var (
@@ -20,7 +38,6 @@ var (
 	spotifyClientSecret string
 	redirectURI         string
 	apiToken            string
-	sessionStore        = sessions.NewCookieStore([]byte("super-secret-key"))
 )
 
 const spotifyAPIBaseURL = "https://api.spotify.com/v1"
@@ -70,28 +87,22 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func callbackHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the authorization code from the query string
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Missing authorization code", http.StatusBadRequest)
 		return
 	}
 
-	// Exchange the authorization code for an access token
 	token, err := exchangeCodeForToken(code)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error exchanging code for token: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Store the access token in a session
-	session, _ := sessionStore.Get(r, "spotify-session")
-	session.Values["access_token"] = token.AccessToken
-	session.Values["refresh_token"] = token.RefreshToken
-	session.Save(r, w)
+	apiKey := generateAPIKey()
+	storeAPIKey(apiKey, token)
 
-	// Redirect the user to the /setup endpoint
-	http.Redirect(w, r, "/setup", http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("/setup?api_key=%s", apiKey), http.StatusFound)
 }
 
 func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
@@ -136,17 +147,12 @@ func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
 }
 
 func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
-	// Retrieve the access token from the session
-	session, _ := sessionStore.Get(r, "spotify-session")
-	accessToken := session.Values["access_token"]
-
-	// If no valid access token is found
-	if accessToken == nil {
-		http.Error(w, "No valid access token found", http.StatusUnauthorized)
+	apiKey := r.URL.Query().Get("api_key")
+	if apiKey == "" {
+		http.Error(w, "API key not found", http.StatusBadRequest)
 		return
 	}
 
-	// Define the template for the setup page
 	tmpl := `
 		<!DOCTYPE html>
 		<html lang="en">
@@ -188,24 +194,24 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 		</head>
 		<body>
 			<h1>Spotify Setup Complete!</h1>
-			<p>Your Spotify access token is:</p>
-			<pre id="accessToken">{{.AccessToken}}</pre>
-			<button onclick="copyToken()">Copy Token</button>
-			<p>Now, to use this token in Siri Shortcuts:</p>
+			<p>Your API key is:</p>
+			<pre id="apiKey">{{.APIKey}}</pre>
+			<button onclick="copyApiKey()">Copy API Key</button>
+			<p>Now, to use this api key in Siri Shortcuts:</p>
 			<ol>
 				<li>Open the Shortcuts app on your iPhone.</li>
 				<li>Tap "+" in the upper right.</li>
 				<li>Search for "Get Contents of URL".</li>
 				<li>Set the URL to <code>http://localhost:8080/current-song</code>.</li>
 				<li>Set "Method" to "POST".</li>
-				<li>Set "Headers" to Key=<code>Authorization</code> and Text=<code>Bearer YOUR_ACCESS_TOKEN</code>.</li>
+				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
 				<li>You can now use this Shortcut to check the current song!</li>
 			</ol>
 			<img src="/static/example-shortcut.jpeg" alt="Apple Shortcut Example Setup" />
 			<script>
-				function copyToken() {
+				function copyApiKey() {
 					// Get the token text
-					const token = document.getElementById("accessToken").innerText;
+					const token = document.getElementById("apiKey").innerText;
 					
 					// Copy the token to clipboard
 					navigator.clipboard.writeText(token);
@@ -215,56 +221,58 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 		</html>
 	`
 
-	// Create a template and execute it
 	t, err := template.New("setup").Parse(tmpl)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error parsing template: %s", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Render the page with the access token
-	err = t.Execute(w, map[string]interface{}{
-		"AccessToken": accessToken,
-	})
+	err = t.Execute(w, map[string]string{"APIKey": apiKey})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error rendering template: %s", err), http.StatusInternalServerError)
 	}
 }
 
 func currentSongHandler(w http.ResponseWriter, r *http.Request) {
-	var accessToken string
-
-	// Check if the access token is provided in the Authorization header
-	authHeader := r.Header.Get("Authorization")
-	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-		// Extract the token from the Authorization header
-		accessToken = strings.TrimPrefix(authHeader, "Bearer ")
-	} else {
-		// If the token is not in the header, fallback to the session store
-		session, _ := sessionStore.Get(r, "spotify-session")
-		accessToken = session.Values["access_token"].(string)
-	}
-
-	// If no valid access token is found
-	if accessToken == "" {
-		http.Error(w, "No valid access token found", http.StatusUnauthorized)
+	apiKey := r.Header.Get("X-API-Key")
+	if apiKey == "" {
+		http.Error(w, "Missing API Key", http.StatusUnauthorized)
 		return
 	}
 
-	// Get the currently playing song's ID, name, and artist
-	songID, songName, artistName, err := getCurrentlyPlayingSong(accessToken)
+	apiKeysMux.Lock()
+	tokenData, exists := apiKeys[apiKey]
+	apiKeysMux.Unlock()
+
+	if !exists {
+		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		return
+	}
+
+	// Refresh token if expired
+	if time.Now().After(tokenData.ExpiresAt) {
+		newToken, err := refreshSpotifyToken(tokenData.RefreshToken)
+		if err != nil {
+			http.Error(w, "Failed to refresh access token", http.StatusInternalServerError)
+			return
+		}
+
+		tokenData.AccessToken = newToken.AccessToken
+		tokenData.ExpiresAt = time.Now().Add(time.Hour)
+	}
+
+	// Fetch the current song
+	songID, songName, artistName, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
 		return
 	}
 
-	// If no song is currently playing
 	if songID == "" {
 		http.Error(w, "No song is currently playing", http.StatusNotFound)
 		return
 	}
 
-	// Display the currently playing song and artist
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -338,7 +346,60 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, error)
 	return songID, songName, artistName, nil
 }
 
-type SpotifyAccessToken struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+func generateAPIKey() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 32
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	apiKey := make([]byte, length)
+	for i := range apiKey {
+		apiKey[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(apiKey)
+}
+
+func storeAPIKey(apiKey string, token *SpotifyAccessToken) {
+	apiKeysMux.Lock()
+	defer apiKeysMux.Unlock()
+	apiKeys[apiKey] = &TokenData{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Hour), // Spotify tokens typically expire after 1 hour
+	}
+}
+
+func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", spotifyTokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(spotifyClientID, spotifyClientSecret)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var token SpotifyAccessToken
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to refresh token: %s", body)
+	}
+
+	err = json.Unmarshal(body, &token)
+	if err != nil {
+		return nil, err
+	}
+
+	return &token, nil
 }
