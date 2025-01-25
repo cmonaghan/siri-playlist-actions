@@ -10,17 +10,17 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
+	"github.com/gomodule/redigo/redis"
 	"github.com/joho/godotenv"
 )
 
 type TokenData struct {
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Time
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 type SpotifyAccessToken struct {
@@ -28,10 +28,7 @@ type SpotifyAccessToken struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-var (
-	apiKeys    = make(map[string]*TokenData)
-	apiKeysMux sync.Mutex
-)
+var redisPool *redis.Pool
 
 var (
 	spotifyClientID     string
@@ -56,6 +53,10 @@ func main() {
 	spotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
 	redirectURI = os.Getenv("REDIRECT_URI") // This should match the one set in Spotify Developer Dashboard
 	apiToken = os.Getenv("API_TOKEN")
+	redisURL := os.Getenv("KV_URL")
+
+	initRedis(redisURL)
+	defer redisPool.Close()
 
 	// Check if Spotify credentials and API token are set in the environment variables
 	if spotifyClientID == "" || spotifyClientSecret == "" || apiToken == "" || redirectURI == "" {
@@ -100,7 +101,11 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiKey := generateAPIKey()
-	storeAPIKey(apiKey, token)
+	err = storeAPIKey(apiKey, token)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to store API key: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	http.Redirect(w, r, fmt.Sprintf("/setup?api_key=%s", apiKey), http.StatusFound)
 }
@@ -240,11 +245,8 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKeysMux.Lock()
-	tokenData, exists := apiKeys[apiKey]
-	apiKeysMux.Unlock()
-
-	if !exists {
+	tokenData, err := getTokenData(apiKey)
+	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
 	}
@@ -259,6 +261,16 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 
 		tokenData.AccessToken = newToken.AccessToken
 		tokenData.ExpiresAt = time.Now().Add(time.Hour)
+
+		// Persist the updated token data
+		err = storeAPIKey(apiKey, &SpotifyAccessToken{
+			AccessToken:  tokenData.AccessToken,
+			RefreshToken: tokenData.RefreshToken,
+		})
+		if err != nil {
+			http.Error(w, "Failed to persist updated token", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Fetch the current song
@@ -357,14 +369,27 @@ func generateAPIKey() string {
 	return string(apiKey)
 }
 
-func storeAPIKey(apiKey string, token *SpotifyAccessToken) {
-	apiKeysMux.Lock()
-	defer apiKeysMux.Unlock()
-	apiKeys[apiKey] = &TokenData{
+func storeAPIKey(apiKey string, token *SpotifyAccessToken) error {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	tokenData := TokenData{
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Hour), // Spotify tokens typically expire after 1 hour
 	}
+
+	data, err := json.Marshal(tokenData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal token data: %v", err)
+	}
+
+	_, err = conn.Do("SET", apiKey, data, "EX", 3600*24*30) // Set expiration to 30 days
+	if err != nil {
+		return fmt.Errorf("failed to store API key in Redis: %v", err)
+	}
+
+	return nil
 }
 
 func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
@@ -402,4 +427,44 @@ func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
 	}
 
 	return &token, nil
+}
+
+func getTokenData(apiKey string) (*TokenData, error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", apiKey))
+	if err == redis.ErrNil {
+		return nil, fmt.Errorf("API key not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve API key from Redis: %v", err)
+	}
+
+	var tokenData TokenData
+	err = json.Unmarshal(data, &tokenData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal token data: %v", err)
+	}
+
+	return &tokenData, nil
+}
+
+func initRedis(redisURL string) {
+	if redisURL == "" {
+		log.Fatal("KV_URL environment variable is not set")
+	}
+
+	redisPool = &redis.Pool{
+		MaxIdle:   10,
+		MaxActive: 100,
+		Wait:      true,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.DialURL(redisURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to connect to Redis: %v", err)
+			}
+			return c, nil
+		},
+	}
 }
