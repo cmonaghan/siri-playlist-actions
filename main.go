@@ -28,13 +28,11 @@ type SpotifyAccessToken struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-var redisPool *redis.Pool
-
 var (
 	spotifyClientID     string
 	spotifyClientSecret string
 	redirectURI         string
-	apiToken            string
+	redisPool           *redis.Pool
 )
 
 const spotifyAPIBaseURL = "https://api.spotify.com/v1"
@@ -52,15 +50,14 @@ func main() {
 	spotifyClientID = os.Getenv("SPOTIFY_CLIENT_ID")
 	spotifyClientSecret = os.Getenv("SPOTIFY_CLIENT_SECRET")
 	redirectURI = os.Getenv("REDIRECT_URI") // This should match the one set in Spotify Developer Dashboard
-	apiToken = os.Getenv("API_TOKEN")
 	redisURL := os.Getenv("KV_URL")
 
 	initRedis(redisURL)
 	defer redisPool.Close()
 
 	// Check if Spotify credentials and API token are set in the environment variables
-	if spotifyClientID == "" || spotifyClientSecret == "" || apiToken == "" || redirectURI == "" {
-		log.Fatal("Spotify Client ID, Client Secret, API Token, and Redirect URI must be set as environment variables.")
+	if spotifyClientID == "" || spotifyClientSecret == "" || redirectURI == "" || redisURL == "" {
+		log.Fatal("Missing required environment variables.")
 		return
 	}
 
