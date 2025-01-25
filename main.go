@@ -157,6 +157,20 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tokenData, err := getTokenData(apiKey)
+	if err != nil {
+		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		return
+	}
+
+	// Fetch the currently playing song details
+	songID, songName, artistName, playlistID, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Define the template for the setup page
 	tmpl := `
 		<!DOCTYPE html>
 		<html lang="en">
@@ -201,7 +215,13 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 			<p>Your API key is:</p>
 			<pre id="apiKey">{{.APIKey}}</pre>
 			<button onclick="copyApiKey()">Copy API Key</button>
-			<p>Now, to use this api key in Siri Shortcuts:</p>
+			<h2>Currently Playing</h2>
+			<ul>
+				<li><strong>Song:</strong> {{.CurrentSong}}</li>
+				<li><strong>Artist:</strong> {{.ArtistName}}</li>
+				<li><strong>Playlist ID:</strong> {{.PlaylistID}}</li>
+			</ul>
+			<p>Now, to use this API key in Siri Shortcuts:</p>
 			<ol>
 				<li>Open the Shortcuts app on your iPhone.</li>
 				<li>Tap "+" in the upper right.</li>
@@ -214,10 +234,10 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 			<img src="/static/example-shortcut.jpeg" alt="Apple Shortcut Example Setup" />
 			<script>
 				function copyApiKey() {
-					// Get the token text
+					// Get the API key text
 					const token = document.getElementById("apiKey").innerText;
 					
-					// Copy the token to clipboard
+					// Copy the API key to clipboard
 					navigator.clipboard.writeText(token);
 				}
 			</script>
@@ -225,16 +245,26 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 		</html>
 	`
 
+	// Create a template and execute it
 	t, err := template.New("setup").Parse(tmpl)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error parsing template: %s", err), http.StatusInternalServerError)
 		return
 	}
 
-	err = t.Execute(w, map[string]string{"APIKey": apiKey})
+	// Render the page with the API key and song details
+	err = t.Execute(w, map[string]interface{}{
+		"APIKey":      apiKey,
+		"CurrentSong": songName,
+		"ArtistName":  artistName,
+		"PlaylistID":  playlistID,
+	})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error rendering template: %s", err), http.StatusInternalServerError)
 	}
+
+	// Use songID to satisfy the compiler, even though it's not needed anywhere in this function
+	_ = songID
 }
 
 func currentSongHandler(w http.ResponseWriter, r *http.Request) {
