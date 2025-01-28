@@ -80,33 +80,125 @@ func main() {
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate the Spotify authorization URL
-	authURL := fmt.Sprintf("%s?client_id=%s&response_type=code&redirect_uri=%s&scope=user-read-playback-state user-modify-playback-state", spotifyAuthURL, spotifyClientID, url.QueryEscape(redirectURI))
+	authURL := fmt.Sprintf(
+		"%s?client_id=%s&response_type=code&redirect_uri=%s&scope=user-read-playback-state user-modify-playback-state user-read-email",
+		spotifyAuthURL, spotifyClientID, url.QueryEscape(redirectURI),
+	)
 
 	// Redirect the user to the Spotify authorization page
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 func callbackHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the authorization code from the query string
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Missing authorization code", http.StatusBadRequest)
 		return
 	}
 
+	// Exchange the authorization code for an access token
 	token, err := exchangeCodeForToken(code)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error exchanging code for token: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	apiKey := generateAPIKey()
-	err = storeAPIKey(apiKey, token)
+	// Fetch the Spotify user ID (or email) for identifying the user
+	userID, err := getSpotifyUserID(token.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to store API key: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error fetching Spotify user ID: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Check if an API key already exists for this user
+	apiKey, err := getAPIKeyByUserID(userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error checking existing API key: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if apiKey == "" {
+		// Generate a new API key if one doesn't exist
+		apiKey = generateAPIKey()
+
+		// Store the new API key
+		err = storeAPIKey(apiKey, token)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to store API key: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Map the user ID to the new API key
+		err = mapUserIDToAPIKey(userID, apiKey)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to map user ID to API key: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Redirect the user to the /setup endpoint with the API key
 	http.Redirect(w, r, fmt.Sprintf("/setup?api_key=%s", apiKey), http.StatusFound)
+}
+
+func getAPIKeyByUserID(userID string) (string, error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	apiKey, err := redis.String(conn.Do("GET", fmt.Sprintf("user:%s", userID)))
+	if err == redis.ErrNil {
+		// No API key found for this user
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve API key by user ID: %v", err)
+	}
+
+	return apiKey, nil
+}
+
+func getSpotifyUserID(accessToken string) (string, error) {
+	url := fmt.Sprintf("%s/me", spotifyAPIBaseURL)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to fetch user ID: %s", body)
+	}
+
+	var data struct {
+		ID string `json:"id"` // Spotify user ID
+	}
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return "", err
+	}
+
+	return data.ID, nil
+}
+
+func mapUserIDToAPIKey(userID, apiKey string) error {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("SET", fmt.Sprintf("user:%s", userID), apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to map user ID to API key: %v", err)
+	}
+
+	return nil
 }
 
 func exchangeCodeForToken(code string) (*SpotifyAccessToken, error) {
@@ -432,10 +524,17 @@ func storeAPIKey(apiKey string, token *SpotifyAccessToken) error {
 	return nil
 }
 
-func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
+func refreshSpotifyToken(apiKey string) (*SpotifyAccessToken, error) {
+	// Retrieve token data using the API key
+	tokenData, err := getTokenData(apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve token data: %v", err)
+	}
+
+	// Refresh the access token using the refresh token
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", refreshToken)
+	data.Set("refresh_token", tokenData.RefreshToken)
 
 	req, err := http.NewRequest("POST", spotifyTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -451,7 +550,7 @@ func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
 	}
 	defer resp.Body.Close()
 
-	var token SpotifyAccessToken
+	var newToken SpotifyAccessToken
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -461,12 +560,27 @@ func refreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
 		return nil, fmt.Errorf("failed to refresh token: %s", body)
 	}
 
-	err = json.Unmarshal(body, &token)
+	err = json.Unmarshal(body, &newToken)
 	if err != nil {
 		return nil, err
 	}
 
-	return &token, nil
+	// Update the token data in Redis
+	tokenData.AccessToken = newToken.AccessToken
+	if newToken.RefreshToken != "" {
+		tokenData.RefreshToken = newToken.RefreshToken
+	}
+	tokenData.ExpiresAt = time.Now().Add(time.Hour) // Tokens usually expire in 1 hour
+
+	err = storeAPIKey(apiKey, &SpotifyAccessToken{
+		AccessToken:  tokenData.AccessToken,
+		RefreshToken: tokenData.RefreshToken,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update token data in Redis: %v", err)
+	}
+
+	return &newToken, nil
 }
 
 func getTokenData(apiKey string) (*TokenData, error) {
