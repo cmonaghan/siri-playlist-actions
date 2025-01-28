@@ -67,6 +67,7 @@ func main() {
 	http.HandleFunc("/setup", completeSetupHandler)
 	// endpoints for regular usage
 	http.HandleFunc("/current-song", currentSongHandler)
+	http.HandleFunc("/add-song-to-playlist", addSongToPlaylistHandler)
 
 	// Serve static files (e.g., images, stylesheets) from the "static" directory
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -81,8 +82,11 @@ func main() {
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate the Spotify authorization URL
 	authURL := fmt.Sprintf(
-		"%s?client_id=%s&response_type=code&redirect_uri=%s&scope=user-read-playback-state user-modify-playback-state user-read-email",
-		spotifyAuthURL, spotifyClientID, url.QueryEscape(redirectURI),
+		"%s?client_id=%s&response_type=code&redirect_uri=%s&scope=%s",
+		spotifyAuthURL,
+		spotifyClientID,
+		url.QueryEscape(redirectURI),
+		url.QueryEscape("user-read-playback-state user-modify-playback-state playlist-modify-public playlist-modify-private"),
 	)
 
 	// Redirect the user to the Spotify authorization page
@@ -104,7 +108,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch the Spotify user ID (or email) for identifying the user
+	// Fetch the Spotify user ID to identify the user
 	userID, err := getSpotifyUserID(token.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error fetching Spotify user ID: %v", err), http.StatusInternalServerError)
@@ -121,20 +125,20 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	if apiKey == "" {
 		// Generate a new API key if one doesn't exist
 		apiKey = generateAPIKey()
+	}
 
-		// Store the new API key
-		err = storeAPIKey(apiKey, token)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to store API key: %v", err), http.StatusInternalServerError)
-			return
-		}
+	// Update the token data in Redis
+	err = storeAPIKey(apiKey, token)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to store updated API key: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-		// Map the user ID to the new API key
-		err = mapUserIDToAPIKey(userID, apiKey)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to map user ID to API key: %v", err), http.StatusInternalServerError)
-			return
-		}
+	// Map the user ID to the API key
+	err = mapUserIDToAPIKey(userID, apiKey)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to map user ID to API key: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	// Redirect the user to the /setup endpoint with the API key
@@ -621,4 +625,175 @@ func initRedis(redisURL string) {
 			return c, nil
 		},
 	}
+}
+
+func addSongToPlaylistHandler(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Header.Get("X-API-Key")
+	if apiKey == "" {
+		http.Error(w, "Missing API Key", http.StatusUnauthorized)
+		return
+	}
+
+	playlistID := r.Header.Get("X-Playlist-ID")
+	if playlistID == "" {
+		http.Error(w, "Missing Playlist ID", http.StatusBadRequest)
+		return
+	}
+
+	tokenData, err := getTokenData(apiKey)
+	if err != nil {
+		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		return
+	}
+
+	// Get the currently playing song
+	songID, _, _, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
+		return
+	}
+	if songID == "" {
+		http.Error(w, "No song is currently playing", http.StatusNotFound)
+		return
+	}
+
+	// Get the playlist name
+	playlistName, err := getPlaylistName(tokenData.AccessToken, playlistID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving playlist name: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the song is already in the playlist
+	isInPlaylist, err := isSongInPlaylist(tokenData.AccessToken, playlistID, songID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error checking playlist: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	if isInPlaylist {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("This song is already in your playlist %s, so we skipped adding a duplicate.", playlistName)))
+		return
+	}
+
+	// Add the song to the playlist
+	err = addSongToPlaylist(tokenData.AccessToken, playlistID, songID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error adding song to playlist: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("This song was added to your playlist %s.", playlistName)))
+}
+
+func isSongInPlaylist(accessToken, playlistID, songID string) (bool, error) {
+	url := fmt.Sprintf("%s/playlists/%s/tracks", spotifyAPIBaseURL, playlistID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return false, fmt.Errorf("failed to retrieve playlist tracks: %s", body)
+	}
+
+	var data struct {
+		Items []struct {
+			Track struct {
+				ID string `json:"id"`
+			} `json:"track"`
+		} `json:"items"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return false, err
+	}
+
+	for _, item := range data.Items {
+		if item.Track.ID == songID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func addSongToPlaylist(accessToken, playlistID, songID string) error {
+	url := fmt.Sprintf("%s/playlists/%s/tracks", spotifyAPIBaseURL, playlistID)
+
+	body := map[string]interface{}{
+		"uris": []string{fmt.Sprintf("spotify:track:%s", songID)},
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("failed to add song to playlist: %s", body)
+	}
+
+	return nil
+}
+
+func getPlaylistName(accessToken, playlistID string) (string, error) {
+	url := fmt.Sprintf("%s/playlists/%s", spotifyAPIBaseURL, playlistID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to retrieve playlist name: %s", body)
+	}
+
+	var data struct {
+		Name string `json:"name"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return "", err
+	}
+
+	return data.Name, nil
 }
