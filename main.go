@@ -627,7 +627,7 @@ func addSongToPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the currently playing song
-	songID, _, _, playlistID, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, _, _, _, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
