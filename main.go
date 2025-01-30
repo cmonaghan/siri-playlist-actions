@@ -261,7 +261,7 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch the currently playing song details
-	songID, songName, artistName, playlistID, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	_, songName, artistName, playlistID, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
 		return
@@ -359,9 +359,6 @@ func completeSetupHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error rendering template: %s", err), http.StatusInternalServerError)
 	}
-
-	// Use songID to satisfy the compiler, even though it's not needed anywhere in this function
-	_ = songID
 }
 
 func currentSongHandler(w http.ResponseWriter, r *http.Request) {
@@ -377,32 +374,9 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Refresh token if expired
-	if time.Now().After(tokenData.ExpiresAt) {
-		newToken, err := refreshSpotifyToken(tokenData.RefreshToken)
-		if err != nil {
-			http.Error(w, "Failed to refresh access token", http.StatusInternalServerError)
-			return
-		}
-
-		tokenData.AccessToken = newToken.AccessToken
-		tokenData.ExpiresAt = time.Now().Add(time.Hour)
-
-		// Persist the updated token data
-		err = storeAPIKey(apiKey, &SpotifyAccessToken{
-			AccessToken:  tokenData.AccessToken,
-			RefreshToken: tokenData.RefreshToken,
-		})
-		if err != nil {
-			http.Error(w, "Failed to persist updated token", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Fetch the current song and playlist ID
-	songID, songName, artistName, playlistID, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, songName, artistName, _, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -411,23 +385,22 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use playlistID to satisfy the compiler, even though it's not included in the response
-	_ = playlistID
-
-	// Respond with the song and playlist details
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	// Build the response
+	response := map[string]string{
 		"current_song": songName,
 		"artist_name":  artistName,
-	})
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-func getCurrentlyPlayingSong(accessToken string) (string, string, string, string, error) {
+func getCurrentlyPlayingSong(accessToken string) (string, string, string, string, string, error) {
 	// Make the API request to get the currently playing track
 	req, err := http.NewRequest("GET", spotifyAPIBaseURL+"/me/player/currently-playing", nil)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+accessToken)
@@ -435,31 +408,41 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", err
 	}
 
 	// Parse JSON response
 	var data map[string]interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", err
 	}
 
-	var songID, songName, playlistID, playlistName string
+	var songID, songName, artistName, playlistID, playlistName string
 
 	// Extract song details
 	if item, exists := data["item"].(map[string]interface{}); exists {
+		// Get the song ID and name
 		if id, exists := item["id"].(string); exists {
 			songID = id
 		}
 		if name, exists := item["name"].(string); exists {
 			songName = name
+		}
+
+		// Extract artist name
+		if artists, exists := item["artists"].([]interface{}); exists && len(artists) > 0 {
+			if firstArtist, ok := artists[0].(map[string]interface{}); ok {
+				if artistNameValue, exists := firstArtist["name"].(string); exists {
+					artistName = artistNameValue
+				}
+			}
 		}
 	}
 
@@ -479,15 +462,16 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	if playlistID != "" {
 		playlistName, err = getPlaylistName(accessToken, playlistID)
 		if err != nil {
-			return "", "", "", "", fmt.Errorf("failed to retrieve playlist name: %v", err)
+			return "", "", "", "", "", fmt.Errorf("failed to retrieve playlist name: %v", err)
 		}
 	}
 
-	if songID == "" || songName == "" {
-		return "", "", "", "", fmt.Errorf("could not find the song ID or name")
+	// Ensure we return the artist even if there's no playlist
+	if songID == "" || songName == "" || artistName == "" {
+		return "", "", "", "", "", fmt.Errorf("could not find the song ID, name, or artist")
 	}
 
-	return songID, songName, playlistID, playlistName, nil
+	return songID, songName, artistName, playlistID, playlistName, nil
 }
 
 func generateAPIKey() string {
@@ -643,7 +627,7 @@ func addSongToPlaylistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the currently playing song
-	songID, _, _, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, _, _, playlistID, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
@@ -807,18 +791,20 @@ func removeCurrentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the currently playing song and playlist
-	songID, _, playlistID, playlistName, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	// Updated: Correctly handle all 6 returned values
+	songID, _, _, playlistID, playlistName, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error retrieving currently playing song: %s", err), http.StatusInternalServerError)
 		return
 	}
+
 	if songID == "" {
-		http.Error(w, "No song is currently playing, so we cannot remove it", http.StatusNotFound)
+		http.Error(w, "No song is currently playing", http.StatusNotFound)
 		return
 	}
+
 	if playlistID == "" {
-		http.Error(w, "The currently playing song is not from a playlist, so we cannot remove it", http.StatusBadRequest)
+		http.Error(w, "The song is not playing from a playlist so it cannot be removed", http.StatusNotFound)
 		return
 	}
 
