@@ -374,7 +374,7 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	songID, songName, artistName, _, _, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, songName, artistName, _, playlistName, err := getCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
@@ -389,6 +389,10 @@ func currentSongHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]string{
 		"current_song": songName,
 		"artist_name":  artistName,
+	}
+
+	if playlistName != "" {
+		response["playlist_name"] = playlistName
 	}
 
 	w.WriteHeader(http.StatusOK)
