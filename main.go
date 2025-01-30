@@ -68,6 +68,7 @@ func main() {
 	// endpoints for regular usage
 	http.HandleFunc("/current-song", currentSongHandler)
 	http.HandleFunc("/add-song-to-playlist", addSongToPlaylistHandler)
+	http.HandleFunc("/remove-current-song", removeCurrentSongHandler)
 
 	// Serve static files (e.g., images, stylesheets) from the "static" directory
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -429,10 +430,8 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, string
 		return "", "", "", "", err
 	}
 
-	// Set the Authorization header
 	req.Header.Add("Authorization", "Bearer "+accessToken)
 
-	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -440,50 +439,47 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	}
 	defer resp.Body.Close()
 
-	// Check if there is no track playing
-	if resp.StatusCode == 204 {
-		return "", "", "", "", nil // No track playing
-	}
-
-	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	// Parse the currently playing track
+	// Parse JSON response
 	var data map[string]interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return "", "", "", "", err
 	}
 
-	// Extract song ID, name, artist name, and playlist ID
-	var songID, songName, artistName, playlistID string
+	var songID, songName, playlistID, playlistName string
 
+	// Extract song details
 	if item, exists := data["item"].(map[string]interface{}); exists {
-		// Get the song ID and name
 		if id, exists := item["id"].(string); exists {
 			songID = id
 		}
 		if name, exists := item["name"].(string); exists {
 			songName = name
 		}
-
-		// Get the artist name
-		if artists, exists := item["artists"].([]interface{}); exists && len(artists) > 0 {
-			if firstArtist, ok := artists[0].(map[string]interface{}); ok {
-				if artistNameValue, exists := firstArtist["name"].(string); exists {
-					artistName = artistNameValue
-				}
-			}
-		}
 	}
 
 	// Extract playlist ID from context
 	if context, exists := data["context"].(map[string]interface{}); exists {
-		if uri, exists := context["uri"].(string); exists && strings.HasPrefix(uri, "spotify:playlist:") {
-			playlistID = strings.TrimPrefix(uri, "spotify:playlist:")
+		if uri, exists := context["uri"].(string); exists {
+			if strings.HasPrefix(uri, "spotify:playlist:") {
+				playlistID = strings.TrimPrefix(uri, "spotify:playlist:")
+			} else {
+				// Log unexpected context URI (e.g., album or track)
+				log.Printf("Current playback is not from a playlist, context URI: %s", uri)
+			}
+		}
+	}
+
+	// Get playlist name if a playlist ID exists
+	if playlistID != "" {
+		playlistName, err = getPlaylistName(accessToken, playlistID)
+		if err != nil {
+			return "", "", "", "", fmt.Errorf("failed to retrieve playlist name: %v", err)
 		}
 	}
 
@@ -491,7 +487,7 @@ func getCurrentlyPlayingSong(accessToken string) (string, string, string, string
 		return "", "", "", "", fmt.Errorf("could not find the song ID or name")
 	}
 
-	return songID, songName, artistName, playlistID, nil
+	return songID, songName, playlistID, playlistName, nil
 }
 
 func generateAPIKey() string {
@@ -796,4 +792,134 @@ func getPlaylistName(accessToken, playlistID string) (string, error) {
 	}
 
 	return data.Name, nil
+}
+
+func removeCurrentSongHandler(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Header.Get("X-API-Key")
+	if apiKey == "" {
+		http.Error(w, "Missing API Key", http.StatusUnauthorized)
+		return
+	}
+
+	tokenData, err := getTokenData(apiKey)
+	if err != nil {
+		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		return
+	}
+
+	// Get the currently playing song and playlist
+	songID, _, playlistID, playlistName, err := getCurrentlyPlayingSong(tokenData.AccessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving currently playing song: %s", err), http.StatusInternalServerError)
+		return
+	}
+	if songID == "" {
+		http.Error(w, "No song is currently playing, so we cannot remove it", http.StatusNotFound)
+		return
+	}
+	if playlistID == "" {
+		http.Error(w, "The currently playing song is not from a playlist, so we cannot remove it", http.StatusBadRequest)
+		return
+	}
+
+	// Check playlist ownership
+	isOwner, err := isPlaylistOwnedByUser(tokenData.AccessToken, playlistID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error checking playlist ownership: %s", err), http.StatusInternalServerError)
+		return
+	}
+	if !isOwner {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("The current playlist is not owned by you, so we cannot remove this song"))
+		return
+	}
+
+	// Remove the song from the playlist
+	err = removeSongFromPlaylist(tokenData.AccessToken, playlistID, songID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error removing song from playlist: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("This song has been removed from your playlist %s", playlistName)))
+}
+
+func isPlaylistOwnedByUser(accessToken, playlistID string) (bool, error) {
+	url := fmt.Sprintf("%s/playlists/%s", spotifyAPIBaseURL, playlistID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return false, fmt.Errorf("failed to retrieve playlist details: %s", body)
+	}
+
+	var data struct {
+		Owner struct {
+			ID string `json:"id"`
+		} `json:"owner"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return false, err
+	}
+
+	// Fetch the user's ID
+	userID, err := getSpotifyUserID(accessToken)
+	if err != nil {
+		return false, err
+	}
+
+	return data.Owner.ID == userID, nil
+}
+
+func removeSongFromPlaylist(accessToken, playlistID, songID string) error {
+	url := fmt.Sprintf("%s/playlists/%s/tracks", spotifyAPIBaseURL, playlistID)
+
+	body := map[string]interface{}{
+		"tracks": []map[string]string{
+			{
+				"uri": fmt.Sprintf("spotify:track:%s", songID),
+			},
+		},
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("DELETE", url, strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("failed to remove song from playlist: %s", body)
+	}
+
+	return nil
 }
