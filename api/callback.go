@@ -3,11 +3,20 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"siri-playlist-actions/utils"
+
+	"github.com/gomodule/redigo/redis"
 )
+
+var redisPool *redis.Pool
 
 // Handler for /api/callback
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	redisURL := os.Getenv("KV_URL")
+	utils.InitRedis(redisURL)
+	defer redisPool.Close()
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Missing authorization code", http.StatusBadRequest)

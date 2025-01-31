@@ -8,9 +8,9 @@ Create a .env file
 
     cp .env.example .env
 
-Update values in .env with your spotify developer credentials
+Update values in .env with your spotify developer credentials and redis url found on the Vercel dashboard page.
 
 
 Run the server:
 
-    export $(cat .env | xargs) && go run api/main.go
+    export $(cat .env | xargs) && vercel dev --listen 8080

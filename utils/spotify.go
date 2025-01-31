@@ -223,3 +223,44 @@ func RemoveSongFromPlaylist(accessToken, playlistID, songID string) error {
 
 	return nil
 }
+
+func IsPlaylistOwnedByUser(accessToken, playlistID string) (bool, error) {
+	url := fmt.Sprintf("%s/playlists/%s", SpotifyAPIBaseURL, playlistID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return false, fmt.Errorf("failed to retrieve playlist details: %s", body)
+	}
+
+	var data struct {
+		Owner struct {
+			ID string `json:"id"`
+		} `json:"owner"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return false, err
+	}
+
+	// Fetch the user's ID
+	userID, err := GetSpotifyUserID(accessToken)
+	if err != nil {
+		return false, err
+	}
+
+	return data.Owner.ID == userID, nil
+}
