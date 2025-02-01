@@ -15,6 +15,14 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// connect to database
+	redisPool, err := utils.InitRedis()
+	if err != nil {
+		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
+		return
+	}
+	defer redisPool.Close()
+
 	// Retrieve token data from Redis
 	tokenData, err := utils.GetTokenData(apiKey)
 	if err != nil {
@@ -60,5 +68,5 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Success response
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("This song has been removed from your playlist %s", playlistName)))
+	w.Write([]byte(fmt.Sprintf("This song was removed from your playlist %s", playlistName)))
 }

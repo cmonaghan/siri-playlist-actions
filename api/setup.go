@@ -9,18 +9,19 @@ import (
 
 // Handler for /api/setup
 func SetupHandler(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.URL.Query().Get("api_key")
+	if apiKey == "" {
+		http.Error(w, "API key not found", http.StatusBadRequest)
+		return
+	}
+
+	// connect to database
 	redisPool, err := utils.InitRedis()
 	if err != nil {
 		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
 		return
 	}
 	defer redisPool.Close()
-
-	apiKey := r.URL.Query().Get("api_key")
-	if apiKey == "" {
-		http.Error(w, "API key not found", http.StatusBadRequest)
-		return
-	}
 
 	tokenData, err := utils.GetTokenData(apiKey)
 	if err != nil {

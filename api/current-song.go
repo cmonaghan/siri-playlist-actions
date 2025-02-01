@@ -14,6 +14,14 @@ func CurrentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// connect to database
+	redisPool, err := utils.InitRedis()
+	if err != nil {
+		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
+		return
+	}
+	defer redisPool.Close()
+
 	tokenData, err := utils.GetTokenData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)

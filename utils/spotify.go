@@ -71,8 +71,8 @@ func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	if playlistID != "" {
 		playlistName, err = GetPlaylistName(accessToken, playlistID)
 		if err != nil {
-			playlistName = "unknown playlist"
-			// return "", "", "", "", "", err
+			// playlist name is only used for cosmetics, so don't hard error on failure to lookup name
+			playlistName = "unknown"
 		}
 	}
 
@@ -264,4 +264,47 @@ func IsPlaylistOwnedByUser(accessToken, playlistID string) (bool, error) {
 	}
 
 	return data.Owner.ID == userID, nil
+}
+
+func IsSongInPlaylist(accessToken, playlistID, songID string) (bool, error) {
+	url := fmt.Sprintf("%s/playlists/%s/tracks", SpotifyAPIBaseURL, playlistID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return false, fmt.Errorf("failed to retrieve playlist tracks: %s", body)
+	}
+
+	var data struct {
+		Items []struct {
+			Track struct {
+				ID string `json:"id"`
+			} `json:"track"`
+		} `json:"items"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return false, err
+	}
+
+	for _, item := range data.Items {
+		if item.Track.ID == songID {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
