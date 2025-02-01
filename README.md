@@ -9,12 +9,12 @@ Create a .env.local file
 
     vercel env pull
 
-If you want to test login to spotify while running locally, you'll also need to:
+The best way to set a variable differently for dev vs prod is to set it in Vercel, and then specify the particular environment for variable. For example:
 
-1. Update your .env.local to `REDIRECT_URI=http://localhost:8080/api/callback`
-2. In the [spotify developer portal](https://developer.spotify.com/dashboard/645f0d6f7ba34906b685002e1308be1c/settings), update the redirect uri to `http://localhost:8080/api/callback`
-
-Though if you already have a valid API key these steps are not necessary.
+| Environment | Key          | Value                                            |
+|-------------|--------------|--------------------------------------------------|
+| Development | REDIRECT_URI | "http://localhost:8080/api/callback"             |
+| Production  | REDIRECT_URI | "https://spotify.woolgathering.io/api/callback"  |
 
 
 Run the server:
