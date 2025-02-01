@@ -5,13 +5,21 @@ Custom siri actions to interact with the current Spotify song or playlist
 ## Try it out
 
 1. Navigate to https://spotify.woolgathering.io/
-2. Connect to Spotify
+2. Connect to Spotify (Note: I'll need to add you as an approved beta tester in order to login, or you can setup your own spotify developer credentials, described below)
 3. Follow the setup instruction to create an Apple Shortcut
 4. Try using a Siri voice command to trigger the shortcut
 
 ![landing page](./readme-images/landing.png)
 ![spotify login](./readme-images/spotify-login.png)
 ![add song apple shortcut](./static/add-song.png)
+
+
+## Set up with your own Spotify developer credentials
+
+1. Follow the Spotify Developer Getting Started guide at https://developer.spotify.com/documentation/web-api to create your own developer credentials
+2. Fork this repo
+3. Setup a free account with Vercel for serverless deployments
+4. Through the Vercel marketplace, setup a free Redis data store with Upstash
 
 
 ## Local Development
