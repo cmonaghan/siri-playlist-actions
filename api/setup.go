@@ -144,7 +144,6 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				function copyApiKey() {
 					const token = document.getElementById("apiKey").innerText;
 					navigator.clipboard.writeText(token);
-					alert("API Key copied to clipboard!");
 				}
 
 				function confirmRevoke() {

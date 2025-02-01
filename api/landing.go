@@ -64,7 +64,7 @@ func LandingHandler(w http.ResponseWriter, r *http.Request) {
 				<h1>Welcome to Siri Playlist Actions 🎶</h1>
 				<p>Seamlessly integrate your Spotify experience with Siri Shortcuts!</p>
 				<p>This free community-supported service allows you to add songs to playlists, and remove them—all with voice commands.</p>
-				<p>To get started, connect to your Spotify account:</p>
+				<p>To get started, connect Siri to your Spotify account:</p>
 				<a class="get-started" href="/api/login">Connect to Spotify</a>
 			</div>
 		</body>
