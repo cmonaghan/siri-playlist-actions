@@ -1,9 +1,6 @@
 {
-    "redirects": [
-        { 
-            "source": "/", 
-            "destination": "/api/landing", 
-            "statusCode": 301 
-        }
-    ]
+    "rewrites": [
+        { "source": "/", "destination": "/api/landing" },
+        { "source": "/setup", "destination": "/api/setup" }
+    ]      
 }

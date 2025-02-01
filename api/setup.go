@@ -163,7 +163,7 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 					}).then(response => response.text())
 					.then(data => {
 						alert(data);
-						window.location.href = "/api/landing";
+						window.location.href = "/";
 					})
 					.catch(error => alert("Error revoking access: " + error));
 				}

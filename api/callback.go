@@ -61,5 +61,5 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/api/setup?api_key=%s", apiKey), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("/setup?api_key=%s", apiKey), http.StatusFound)
 }
