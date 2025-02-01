@@ -140,6 +140,7 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 			<img class="example-img" src="/static/remove-song.png" alt="Remove Song example">
 
 			<button class="revoke-button" onclick="confirmRevoke()">Revoke Access</button>
+			<p>If you wish to disconnect your Spotify account and delete your user from the system, click the Revoke Access button.</p>
 
 			<script>
 				function copyApiKey() {
