@@ -8,18 +8,18 @@ import (
 
 // Handler for /api/callback
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Missing authorization code", http.StatusBadRequest)
+		return
+	}
+
 	redisPool, err := utils.InitRedis()
 	if err != nil {
 		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
 		return
 	}
 	defer redisPool.Close()
-
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		http.Error(w, "Missing authorization code", http.StatusBadRequest)
-		return
-	}
 
 	// Exchange code for token
 	token, err := utils.ExchangeCodeForToken(code)

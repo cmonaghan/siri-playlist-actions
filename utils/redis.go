@@ -99,3 +99,45 @@ func GetAPIKeyByUserID(userID string) (string, error) {
 
 	return apiKey, nil
 }
+
+// GetUserIDByAPIKey retrieves the user ID associated with an API key
+func GetUserIDByAPIKey(apiKey string) (string, error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	userID, err := redis.String(conn.Do("GET", fmt.Sprintf("apiKey:%s:user", apiKey)))
+	if err == redis.ErrNil {
+		return "", fmt.Errorf("API key not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve user ID: %v", err)
+	}
+
+	return userID, nil
+}
+
+// DeleteAPIKey removes the API key from Redis
+func DeleteAPIKey(apiKey string) error {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("DEL", fmt.Sprintf("apiKey:%s", apiKey))
+	if err != nil {
+		return fmt.Errorf("failed to delete API key: %v", err)
+	}
+
+	return nil
+}
+
+// DeleteUserIDMapping removes the user-to-API key mapping
+func DeleteUserIDMapping(userID string) error {
+	conn := redisPool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("DEL", fmt.Sprintf("user:%s", userID))
+	if err != nil {
+		return fmt.Errorf("failed to delete user mapping: %v", err)
+	}
+
+	return nil
+}
