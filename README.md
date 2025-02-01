@@ -9,14 +9,18 @@ Custom siri actions to interact with the current Spotify song or playlist
 3. Follow the setup instruction to create an Apple Shortcut
 4. Try using a Siri voice command to trigger the shortcut
 
+![landing page](./readme-images/landing.png)
+![spotify login](./readme-images/spotify-login.png)
+![add song apple shortcut](./static/add-song.png)
+
 
 ## Local Development
 
-Create a .env.local file from existing vercel environment variables
+Create a .env.local file from existing vercel environment variables (optional)
 
     vercel env pull
 
-The best way to set a variable differently for dev vs prod is to set it in Vercel, and then specify the particular environment for variable. For example:
+The best way to set a variable for dev vs prod is to set it in Vercel, and then specify the particular environment for variable. For example:
 
 | Environment | Key          | Value                                          |
 |-------------|--------------|------------------------------------------------|
@@ -28,9 +32,9 @@ Run the server:
 
     vercel dev --listen 8080
 
-Note that `vercel dev` actually pulls the environment variables from vercel, and does not respect your .env.local file (annoying).
+Note that `vercel dev` actually pulls the environment variables from vercel, and does not respect your .env.local file (annoying). Thus the `vercel env pull` command above is not necessary, but I find it helpful to actually see the env variables.
 
-Navigate to http://localhost:8080/ and click "Connect to Spotify", which will redirect you to the setup page with instructions. 
+Navigate to http://localhost:8080/ and click "Connect to Spotify", which will redirect you to a setup page with instructions.
 
 The best way to test changes is to setup Apple Shortcuts as described on the setup page. However, you can also use `curl`, like so:
 
