@@ -2,6 +2,13 @@
 
 Custom siri actions to interact with the current Spotify song or playlist
 
+## Try it out
+
+1. Navigate to https://spotify.woolgathering.io/
+2. Connect to Spotify
+3. Follow the setup instruction to create an Apple Shortcut
+4. Try using a Siri voice command to trigger the shortcut
+
 
 ## Local Development
 
@@ -11,8 +18,8 @@ Create a .env.local file from existing vercel environment variables
 
 The best way to set a variable differently for dev vs prod is to set it in Vercel, and then specify the particular environment for variable. For example:
 
-| Environment | Key          | Value                                            |
-|-------------|--------------|--------------------------------------------------|
+| Environment | Key          | Value                                          |
+|-------------|--------------|------------------------------------------------|
 | Development | REDIRECT_URI | http://localhost:8080/api/callback             |
 | Production  | REDIRECT_URI | https://spotify.woolgathering.io/api/callback  |
 
