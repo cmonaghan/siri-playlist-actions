@@ -71,7 +71,8 @@ func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	if playlistID != "" {
 		playlistName, err = GetPlaylistName(accessToken, playlistID)
 		if err != nil {
-			return "", "", "", "", "", fmt.Errorf("failed to retrieve playlist name: %v", err)
+			playlistName = "unknown playlist"
+			// return "", "", "", "", "", err
 		}
 	}
 

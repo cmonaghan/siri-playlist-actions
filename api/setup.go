@@ -9,6 +9,13 @@ import (
 
 // Handler for /api/setup
 func SetupHandler(w http.ResponseWriter, r *http.Request) {
+	redisPool, err := utils.InitRedis()
+	if err != nil {
+		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
+		return
+	}
+	defer redisPool.Close()
+
 	apiKey := r.URL.Query().Get("api_key")
 	if apiKey == "" {
 		http.Error(w, "API key not found", http.StatusBadRequest)
@@ -21,7 +28,7 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, songName, artistName, playlistID, _, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
+	_, songName, artistName, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
 		return
@@ -34,15 +41,17 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 	<ul>
 		<li><strong>Song:</strong> {{.CurrentSong}}</li>
 		<li><strong>Artist:</strong> {{.ArtistName}}</li>
+		<li><strong>Playlist Name:</strong> {{.PlaylistName}}</li>
 		<li><strong>Playlist ID:</strong> {{.PlaylistID}}</li>
 	</ul>
 	</body></html>`
 
 	t, _ := template.New("setup").Parse(tmpl)
 	t.Execute(w, map[string]string{
-		"APIKey":      apiKey,
-		"CurrentSong": songName,
-		"ArtistName":  artistName,
-		"PlaylistID":  playlistID,
+		"APIKey":       apiKey,
+		"CurrentSong":  songName,
+		"ArtistName":   artistName,
+		"PlaylistName": playlistName,
+		"PlaylistID":   playlistID,
 	})
 }
