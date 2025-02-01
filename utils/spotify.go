@@ -16,6 +16,13 @@ const (
 )
 
 func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string, string, error) {
+	// Make the API request with the stored access token
+	songID, songName, artistName, playlistID, playlistName, err := fetchCurrentlyPlayingSong(accessToken)
+
+	return songID, songName, artistName, playlistID, playlistName, err
+}
+
+func fetchCurrentlyPlayingSong(accessToken string) (string, string, string, string, string, error) {
 	req, err := http.NewRequest("GET", SpotifyAPIBaseURL+"/me/player/currently-playing", nil)
 	if err != nil {
 		return "", "", "", "", "", err
@@ -34,6 +41,24 @@ func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string
 		return "", "", "", "", "", err
 	}
 
+	// Check if the response has an error
+	if resp.StatusCode != 200 {
+		// Try to parse Spotify's error message
+		var errData struct {
+			Error struct {
+				Status  int    `json:"status"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(body, &errData) == nil {
+			return "", "", "", "", "", fmt.Errorf("Spotify API error: %s", errData.Error.Message)
+		}
+
+		// If no JSON error message, return raw response
+		return "", "", "", "", "", fmt.Errorf("Spotify API request failed: %s", body)
+	}
+
+	// Parse JSON response
 	var data map[string]interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
@@ -70,7 +95,6 @@ func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	if playlistID != "" {
 		playlistName, err = GetPlaylistName(accessToken, playlistID)
 		if err != nil {
-			// playlist name is only used for cosmetics, so don't hard error on failure to lookup name
 			playlistName = "unknown"
 		}
 	}

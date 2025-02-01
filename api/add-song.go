@@ -37,27 +37,27 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
 	}
 
-	songID, songName, _, _, _, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, songName, _, _, _, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil || songID == "" {
 		http.Error(w, "No song is currently playing", http.StatusNotFound)
 		return
 	}
 
 	// Get the playlist name (optional)
-	destinationPlaylistName, err := utils.GetPlaylistName(tokenData.AccessToken, destinationPlaylistID)
+	destinationPlaylistName, err := utils.GetPlaylistName(userAuthData.AccessToken, destinationPlaylistID)
 	if err != nil {
 		// If we can't retrieve the name, default to "unknown"
 		destinationPlaylistName = "unknown"
 	}
 
 	// Check if the song is already in the playlist
-	isInPlaylist, err := utils.IsSongInPlaylist(tokenData.AccessToken, destinationPlaylistID, songID)
+	isInPlaylist, err := utils.IsSongInPlaylist(userAuthData.AccessToken, destinationPlaylistID, songID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error checking playlist: %s", err), http.StatusInternalServerError)
 		return
@@ -70,7 +70,7 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add song to playlist
-	err = utils.AddSongToPlaylist(tokenData.AccessToken, destinationPlaylistID, songID)
+	err = utils.AddSongToPlaylist(userAuthData.AccessToken, destinationPlaylistID, songID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error adding song: %s", err), http.StatusInternalServerError)
 		return

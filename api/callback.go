@@ -47,7 +47,7 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		apiKey = utils.GenerateAPIKey()
 
 		// Store token in Redis
-		err = utils.StoreAPIKey(apiKey, token, userID)
+		err = utils.SetAPIKeyToUserAuthData(apiKey, token, userID)
 		if err != nil {
 			http.Error(w, "Failed to store API key", http.StatusInternalServerError)
 			return

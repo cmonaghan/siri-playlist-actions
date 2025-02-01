@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
@@ -22,15 +23,15 @@ func CurrentSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
 	}
 
-	_, songName, artistName, _, playlistName, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
+	_, songName, artistName, _, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil {
-		http.Error(w, "Error getting currently playing song", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
 	}
 

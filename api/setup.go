@@ -23,14 +23,14 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
 	if err != nil {
-		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		http.Error(w, fmt.Sprintf("Invalid API Key: %s", err), http.StatusUnauthorized)
 		return
 	}
 
 	// Fetch currently playing song
-	_, songName, artistName, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
+	_, songName, artistName, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil {
 		songName, artistName, playlistName, playlistID = "Not Available", "Not Available", "Not Available", "Not Available"
 	}

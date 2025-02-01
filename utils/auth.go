@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -18,11 +19,12 @@ type SpotifyAccessToken struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
-// TokenData represents stored token information
-type TokenData struct {
-	AccessToken string    `json:"access_token"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	UserID      string    `json:"user_id"`
+// UserAuthData represents stored token information
+type UserAuthData struct {
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	UserID       string    `json:"user_id"`
 }
 
 // Exchanges authorization code for access token
@@ -98,4 +100,45 @@ func GenerateAPIKey() string {
 		apiKey[i] = charset[seededRand.Intn(len(charset))]
 	}
 	return string(apiKey)
+}
+
+func RefreshSpotifyToken(refreshToken string) (*SpotifyAccessToken, error) {
+	// Prepare request data
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", SpotifyTokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET"))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Parse response
+	var newToken SpotifyAccessToken
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to refresh token: %s", body)
+	}
+
+	err = json.Unmarshal(body, &newToken)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println("✅ Successfully refreshed Spotify token!")
+
+	return &newToken, nil
 }

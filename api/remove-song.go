@@ -24,14 +24,14 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	defer redisPool.Close()
 
 	// Retrieve token data from Redis
-	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
 	}
 
 	// Get currently playing song
-	songID, _, _, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
+	songID, _, _, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error retrieving currently playing song: %s", err), http.StatusInternalServerError)
 		return
@@ -48,7 +48,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the user owns the playlist
-	isOwner, err := utils.IsPlaylistOwnedByUser(tokenData.AccessToken, playlistID)
+	isOwner, err := utils.IsPlaylistOwnedByUser(userAuthData.AccessToken, playlistID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error checking playlist ownership: %s", err), http.StatusInternalServerError)
 		return
@@ -60,7 +60,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove the song from the playlist
-	err = utils.RemoveSongFromPlaylist(tokenData.AccessToken, playlistID, songID)
+	err = utils.RemoveSongFromPlaylist(userAuthData.AccessToken, playlistID, songID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error removing song from playlist: %s", err), http.StatusInternalServerError)
 		return

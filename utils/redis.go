@@ -35,17 +35,18 @@ func InitRedis() (*redis.Pool, error) {
 }
 
 // Stores API key and token data
-func StoreAPIKey(apiKey string, token *SpotifyAccessToken, userID string) error {
+func SetAPIKeyToUserAuthData(apiKey string, token *SpotifyAccessToken, userID string) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	tokenData := TokenData{
-		AccessToken: token.AccessToken,
-		ExpiresAt:   time.Now().Add(time.Hour),
-		UserID:      userID,
+	userAuthData := UserAuthData{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Hour),
+		UserID:       userID,
 	}
 
-	data, err := json.Marshal(tokenData)
+	data, err := json.Marshal(userAuthData)
 	if err != nil {
 		return fmt.Errorf("failed to marshal token data: %v", err)
 	}
@@ -55,10 +56,11 @@ func StoreAPIKey(apiKey string, token *SpotifyAccessToken, userID string) error 
 }
 
 // Retrieves token data using API key
-func GetAPIKeyToTokenData(apiKey string) (*TokenData, error) {
+func GetAPIKeyToUserAuthData(apiKey string) (*UserAuthData, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
+	// Retrieve token data from Redis
 	data, err := redis.Bytes(conn.Do("GET", fmt.Sprintf("apiKey:%s", apiKey)))
 	if err == redis.ErrNil {
 		return nil, fmt.Errorf("API key not found")
@@ -67,13 +69,34 @@ func GetAPIKeyToTokenData(apiKey string) (*TokenData, error) {
 		return nil, fmt.Errorf("failed to retrieve API key from Redis: %v", err)
 	}
 
-	var tokenData TokenData
-	err = json.Unmarshal(data, &tokenData)
+	// Unmarshal token data
+	var userAuthData UserAuthData
+	err = json.Unmarshal(data, &userAuthData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal token data: %v", err)
 	}
 
-	return &tokenData, nil
+	// Check if token is expired
+	if time.Now().After(userAuthData.ExpiresAt) {
+		log.Println("🔄 Access token expired, refreshing...")
+
+		// Refresh the token
+		newToken, err := RefreshSpotifyToken(userAuthData.RefreshToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refresh token: %v", err)
+		}
+		// refresh tokens do not change, so keep the existing one
+		newToken.RefreshToken = userAuthData.RefreshToken
+
+		// Save updated token data in Redis
+		err = SetAPIKeyToUserAuthData(apiKey, newToken, userAuthData.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update token in Redis: %v", err)
+		}
+	}
+
+	// Return valid token data
+	return &userAuthData, nil
 }
 
 // Maps user ID to API key
@@ -114,8 +137,8 @@ func DeleteAPIKey(apiKey string) error {
 	return nil
 }
 
-// DeleteUserIDMapping removes the user-to-API key mapping
-func DeleteUserIDMapping(userID string) error {
+// DeleteUserID removes the user-to-API key mapping
+func DeleteUserID(userID string) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
