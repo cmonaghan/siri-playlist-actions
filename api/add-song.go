@@ -1,26 +1,35 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
 
+// RequestBody defines the expected JSON payload
+type RequestBody struct {
+	PlaylistID string `json:"playlist_id"`
+}
+
 // Handler for /api/add-song
 func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Header.Get("X-API-Key")
-	destinationPlaylistID := r.Header.Get("X-Playlist-ID")
-
 	if apiKey == "" {
 		http.Error(w, "Missing API Key header", http.StatusBadRequest)
 		return
 	}
-	if destinationPlaylistID == "" {
-		http.Error(w, "Missing Playlist ID header", http.StatusBadRequest)
+
+	// Parse JSON request body
+	var requestBody RequestBody
+	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	if err != nil || requestBody.PlaylistID == "" {
+		http.Error(w, "Invalid JSON body: Missing 'playlist_id'", http.StatusBadRequest)
 		return
 	}
+	destinationPlaylistID := requestBody.PlaylistID
 
-	// connect to database
+	// Connect to database
 	redisPool, err := utils.InitRedis()
 	if err != nil {
 		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
@@ -40,10 +49,10 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the playlist name
+	// Get the playlist name (optional)
 	destinationPlaylistName, err := utils.GetPlaylistName(tokenData.AccessToken, destinationPlaylistID)
 	if err != nil {
-		// this is cosmetic, so let the request continue even if this cannot be found
+		// If we can't retrieve the name, default to "unknown"
 		destinationPlaylistName = "unknown"
 	}
 
@@ -60,11 +69,13 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add song to playlist
 	err = utils.AddSongToPlaylist(tokenData.AccessToken, destinationPlaylistID, songID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error adding song: %s", err), http.StatusInternalServerError)
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf("The song '%s' was added to your playlist '%s'", songName, destinationPlaylistName)))
 }

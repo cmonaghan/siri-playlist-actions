@@ -114,7 +114,8 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				<li>Set the URL to <code>https://spotify.woolgathering.io/api/add-song</code>.</li>
 				<li>Set "Method" to "POST".</li>
 				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
-				<li>Set "Headers" to Key: <code>X-Playlist-ID</code> and Text: <code>{{.PlaylistID}}</code></li>
+				<li>Set "Request Body" to "JSON"</li>
+				<li>Key: <code>playlist_id</code>, Type: <code>Text</code>, Text: <code>{{.PlaylistID}}</code></li>
 				<li>Set the title of the shortcut to "Add song to playlist" or whatever Siri command you want to say to trigger the shortcut.</li>
 				<li>All done! Try it out by speaking your voice command to Siri.</li>
 			</ol>
