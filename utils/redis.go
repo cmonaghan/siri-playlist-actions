@@ -35,13 +35,14 @@ func InitRedis() (*redis.Pool, error) {
 }
 
 // Stores API key and token data
-func StoreAPIKey(apiKey string, token *SpotifyAccessToken) error {
+func StoreAPIKey(apiKey string, token *SpotifyAccessToken, userID string) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
 	tokenData := TokenData{
 		AccessToken: token.AccessToken,
 		ExpiresAt:   time.Now().Add(time.Hour),
+		UserID:      userID,
 	}
 
 	data, err := json.Marshal(tokenData)
@@ -49,16 +50,16 @@ func StoreAPIKey(apiKey string, token *SpotifyAccessToken) error {
 		return fmt.Errorf("failed to marshal token data: %v", err)
 	}
 
-	_, err = conn.Do("SET", apiKey, data, "EX", 3600*24*30)
+	_, err = conn.Do("SET", fmt.Sprintf("apiKey:%s", apiKey), data, "EX", 3600*24*30)
 	return err
 }
 
 // Retrieves token data using API key
-func GetTokenData(apiKey string) (*TokenData, error) {
+func GetAPIKeyToTokenData(apiKey string) (*TokenData, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
-	data, err := redis.Bytes(conn.Do("GET", apiKey))
+	data, err := redis.Bytes(conn.Do("GET", fmt.Sprintf("apiKey:%s", apiKey)))
 	if err == redis.ErrNil {
 		return nil, fmt.Errorf("API key not found")
 	}
@@ -76,7 +77,7 @@ func GetTokenData(apiKey string) (*TokenData, error) {
 }
 
 // Maps user ID to API key
-func MapUserIDToAPIKey(userID, apiKey string) error {
+func SetUserIDToAPIKey(userID, apiKey string) error {
 	conn := redisPool.Get()
 	defer conn.Close()
 
@@ -85,7 +86,7 @@ func MapUserIDToAPIKey(userID, apiKey string) error {
 }
 
 // Retrieves API key using user ID
-func GetAPIKeyByUserID(userID string) (string, error) {
+func GetUserIDToAPIKey(userID string) (string, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 
@@ -98,22 +99,6 @@ func GetAPIKeyByUserID(userID string) (string, error) {
 	}
 
 	return apiKey, nil
-}
-
-// GetUserIDByAPIKey retrieves the user ID associated with an API key
-func GetUserIDByAPIKey(apiKey string) (string, error) {
-	conn := redisPool.Get()
-	defer conn.Close()
-
-	userID, err := redis.String(conn.Do("GET", fmt.Sprintf("apiKey:%s:user", apiKey)))
-	if err == redis.ErrNil {
-		return "", fmt.Errorf("API key not found")
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve user ID: %v", err)
-	}
-
-	return userID, nil
 }
 
 // DeleteAPIKey removes the API key from Redis

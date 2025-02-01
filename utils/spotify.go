@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -114,43 +113,6 @@ func GetPlaylistName(accessToken, playlistID string) (string, error) {
 	}
 
 	return data.Name, nil
-}
-
-func RefreshSpotifyToken(refreshToken string, clientID string, clientSecret string) (*SpotifyAccessToken, error) {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequest("POST", SpotifyTokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.SetBasicAuth(clientID, clientSecret)
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var token SpotifyAccessToken
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to refresh token: %s", body)
-	}
-
-	err = json.Unmarshal(body, &token)
-	if err != nil {
-		return nil, err
-	}
-
-	return &token, nil
 }
 
 func AddSongToPlaylist(accessToken, playlistID, songID string) error {

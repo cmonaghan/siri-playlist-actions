@@ -24,7 +24,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	defer redisPool.Close()
 
 	// Retrieve token data from Redis
-	tokenData, err := utils.GetTokenData(apiKey)
+	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return

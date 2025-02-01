@@ -36,28 +36,29 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user already has an API key
-	apiKey, err := utils.GetAPIKeyByUserID(userID)
+	apiKey, err := utils.GetUserIDToAPIKey(userID)
 	if err != nil {
 		http.Error(w, "Error checking API key", http.StatusInternalServerError)
 		return
 	}
 
 	if apiKey == "" {
+		// no API key exists, let's generate one
 		apiKey = utils.GenerateAPIKey()
-	}
 
-	// Store token in Redis
-	err = utils.StoreAPIKey(apiKey, token)
-	if err != nil {
-		http.Error(w, "Failed to store API key", http.StatusInternalServerError)
-		return
-	}
+		// Store token in Redis
+		err = utils.StoreAPIKey(apiKey, token, userID)
+		if err != nil {
+			http.Error(w, "Failed to store API key", http.StatusInternalServerError)
+			return
+		}
 
-	// Map user ID to API key
-	err = utils.MapUserIDToAPIKey(userID, apiKey)
-	if err != nil {
-		http.Error(w, "Failed to map user ID", http.StatusInternalServerError)
-		return
+		// Map user ID to API key
+		err = utils.SetUserIDToAPIKey(userID, apiKey)
+		if err != nil {
+			http.Error(w, "Failed to map user ID", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/api/setup?api_key=%s", apiKey), http.StatusFound)

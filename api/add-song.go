@@ -28,7 +28,7 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	tokenData, err := utils.GetTokenData(apiKey)
+	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return

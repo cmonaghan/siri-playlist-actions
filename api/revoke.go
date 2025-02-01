@@ -23,7 +23,7 @@ func RevokeHandler(w http.ResponseWriter, r *http.Request) {
 	defer redisPool.Close()
 
 	// Retrieve the user ID associated with the API key
-	userID, err := utils.GetUserIDByAPIKey(apiKey)
+	tokenData, err := utils.GetAPIKeyToTokenData(apiKey)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
@@ -37,7 +37,7 @@ func RevokeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove the user-to-API key mapping
-	err = utils.DeleteUserIDMapping(userID)
+	err = utils.DeleteUserIDMapping(tokenData.UserID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error removing user session: %s", err), http.StatusInternalServerError)
 		return

@@ -22,6 +22,7 @@ type SpotifyAccessToken struct {
 type TokenData struct {
 	AccessToken string    `json:"access_token"`
 	ExpiresAt   time.Time `json:"expires_at"`
+	UserID      string    `json:"user_id"`
 }
 
 // Exchanges authorization code for access token
