@@ -29,10 +29,10 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch currently playing song
 	_, songName, artistName, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(tokenData.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error getting current song: %s", err), http.StatusInternalServerError)
-		return
+		songName, artistName, playlistName, playlistID = "Not Available", "Not Available", "Not Available", "Not Available"
 	}
 
 	// Define the HTML template inline
@@ -64,7 +64,7 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 					font-size: 16px;
 					border-radius: 5px;
 					cursor: pointer;
-					margin: 10px;
+					margin: 10px 0;
 				}
 				.copy-button {
 					background-color: #007BFF;
@@ -78,9 +78,12 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				.revoke-button:hover {
 					background-color: #c82333;
 				}
-				img {
+				.example-img {
 					margin-top: 20px;
 					max-width: 100%;
+					border-radius: 8px;
+					box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+					display: block;
 				}
 			</style>
 		</head>
@@ -98,13 +101,22 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				<li><strong>Playlist ID:</strong> {{.PlaylistID}}</li>
 			</ul>
 
-			<button class="revoke-button" onclick="revokeAccess()">Revoke Access</button>
+			<!-- Example Image -->
+			<img class="example-img" src="/static/example.jpeg" alt="Example Usage">
+
+			<button class="revoke-button" onclick="confirmRevoke()">Revoke Access</button>
 
 			<script>
 				function copyApiKey() {
 					const token = document.getElementById("apiKey").innerText;
 					navigator.clipboard.writeText(token);
 					alert("API Key copied to clipboard!");
+				}
+
+				function confirmRevoke() {
+					if (confirm("Are you sure you want to revoke access? This action cannot be undone.")) {
+						revokeAccess();
+					}
 				}
 
 				function revokeAccess() {

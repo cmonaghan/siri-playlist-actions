@@ -1,0 +1,9 @@
+{
+    "redirects": [
+        { 
+            "source": "/", 
+            "destination": "/api/login", 
+            "statusCode": 301 
+        }
+    ]
+}
