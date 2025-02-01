@@ -102,26 +102,41 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 			<p>Your API key is:</p>
 			<pre id="apiKey">{{.APIKey}}</pre>
 			<button class="copy-button" onclick="copyApiKey()">Copy API Key</button>
-			<p>Now, to use this API key in Siri Shortcuts:</p>
+			<p>Below are a few shortcuts that allow you to control Spotify via voice command. You can pick and choose which commands you wish to add as they all function independently.</p>
+			
+			<h3>Shortcut 1: Add song to a designated playlist</h3>
+			<p>This shortcut allows you to add a song to a pre-designated playlist via a Siri voice command. For example, imagine you have a playlist called "Hot Stuff." Setting up this shortcut would allow you to add songs to this playlist via a Siri voice command, such as when you have your hands full while driving, or cooking, or while juggling way too many flaming bowling pins.</p>
+			<ol>
+				<li>Play a song from the playlist you wish to add songs to, then refresh this page.</li>
+				<li>Open the Shortcuts app on your iPhone or macbook (setting the shortcut up on one will mirror to the other). These instructions assume iPhone.</li>
+				<li>Tap "+" in the upper right.</li>
+				<li>Search for "Get Contents of URL".</li>
+				<li>Set the URL to <code>https://spotify.woolgathering.io/api/add-song</code>.</li>
+				<li>Set "Method" to "POST".</li>
+				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
+				<li>Set "Headers" to Key: <code>X-Playlist-ID</code> and Text: <code>{{.PlaylistID}}</code></li>
+				<li>Set the title of the shortcut to "Add song to playlist" or whatever Siri command you want to say to trigger the shortcut.</li>
+				<li>All done! Try it out by speaking your voice command to Siri.</li>
+			</ol>
+			
+			<!-- Example Image -->
+			<img class="example-img" src="/static/add-song.png" alt="Add Song example">
+
+			<h3>Shortcut 2: Remove song from the current playlist</h3>
+			<p>This shortcut allows you to remove a song from the currently playing playlist via a Siri voice command. This only works on playlists that you created.</p>
 			<ol>
 				<li>Open the Shortcuts app on your iPhone or macbook (setting the shortcut up on one will mirror to the other). These instructions assume iPhone.</li>
 				<li>Tap "+" in the upper right.</li>
 				<li>Search for "Get Contents of URL".</li>
-				<li>Set the URL to <code>https://spotify.woolgathering.io/api/current-song</code>.</li>
+				<li>Set the URL to <code>https://spotify.woolgathering.io/api/remove-song</code>.</li>
 				<li>Set "Method" to "POST".</li>
 				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
-				<li>Set the title of the shortcut to "Shortcut current song" or whatever Siri command you want to say to trigger the shortcut.</li>
-				<li>You can now use this Shortcut to check the current song!</li>
+				<li>Set the title of the shortcut to "Remove song from playlist" or whatever Siri command you want to say to trigger the shortcut.</li>
+				<li>All done! Try it out by speaking your voice command to Siri.</li>
 			</ol>
-			<p>You can repeat the same steps to setup shortcuts for:</p>
-			<ul>
-				<li><code>https://spotify.woolgathering.io/api/add-song</code></li>
-				<li><code>https://spotify.woolgathering.io/api/remove-song</code></li>
-			</ul>
-			<p>(Note that <code>/api/add-song</code> will also need the header <code>X-Playlist-ID</code> to be set. You can find the correct Playlist ID value by playing a song from your desired target playlist and then refreshing this page to see the Playlist ID to be displayed above.)</p>
-
+			
 			<!-- Example Image -->
-			<img class="example-img" src="/static/example.png" alt="Example Usage">
+			<img class="example-img" src="/static/remove-song.png" alt="Remove Song example">
 
 			<button class="revoke-button" onclick="confirmRevoke()">Revoke Access</button>
 
