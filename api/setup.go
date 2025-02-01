@@ -80,18 +80,15 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				.example-img {
 					margin-top: 20px;
-					max-width: 100%;
+					width: 100%;
+					max-width: 1000px;
 					border-radius: 8px;
-					box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
 					display: block;
 				}
 			</style>
 		</head>
 		<body>
 			<h1>Spotify Setup Complete!</h1>
-			<p>Your API key is:</p>
-			<pre id="apiKey">{{.APIKey}}</pre>
-			<button class="copy-button" onclick="copyApiKey()">Copy API Key</button>
 
 			<h2>Currently Playing</h2>
 			<ul>
@@ -101,8 +98,30 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 				<li><strong>Playlist ID:</strong> {{.PlaylistID}}</li>
 			</ul>
 
+			<h2>Setup Steps</h2>
+			<p>Your API key is:</p>
+			<pre id="apiKey">{{.APIKey}}</pre>
+			<button class="copy-button" onclick="copyApiKey()">Copy API Key</button>
+			<p>Now, to use this API key in Siri Shortcuts:</p>
+			<ol>
+				<li>Open the Shortcuts app on your iPhone or macbook (setting the shortcut up on one will mirror to the other). These instructions assume iPhone.</li>
+				<li>Tap "+" in the upper right.</li>
+				<li>Search for "Get Contents of URL".</li>
+				<li>Set the URL to <code>https://spotify.woolgathering.io/api/current-song</code>.</li>
+				<li>Set "Method" to "POST".</li>
+				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
+				<li>Set the title of the shortcut to "Shortcut current song" or whatever Siri command you want to say to trigger the shortcut.</li>
+				<li>You can now use this Shortcut to check the current song!</li>
+			</ol>
+			<p>You can repeat the same steps to setup shortcuts for:</p>
+			<ul>
+				<li><code>https://spotify.woolgathering.io/api/add-song</code></li>
+				<li><code>https://spotify.woolgathering.io/api/remove-song</code></li>
+			</ul>
+			<p>(Note that <code>/api/add-song</code> will also need the header <code>X-Playlist-ID</code> to be set. You can find the correct Playlist ID value by playing a song from your desired target playlist and then refreshing this page to see the Playlist ID to be displayed above.)</p>
+
 			<!-- Example Image -->
-			<img class="example-img" src="/static/example.jpeg" alt="Example Usage">
+			<img class="example-img" src="/static/example.png" alt="Example Usage">
 
 			<button class="revoke-button" onclick="confirmRevoke()">Revoke Access</button>
 
