@@ -66,5 +66,5 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte(fmt.Sprintf("The song '%s' was added to your playlist '%s", songName, destinationPlaylistID)))
+	w.Write([]byte(fmt.Sprintf("The song '%s' was added to your playlist '%s'", songName, destinationPlaylistName)))
 }

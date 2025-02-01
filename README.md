@@ -24,4 +24,6 @@ Run the server:
 
 ## Deploy
 
-    vercel deploy
+To prod:
+
+    vercel deploy --prod
