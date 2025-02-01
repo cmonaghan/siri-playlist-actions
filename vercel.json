@@ -2,7 +2,7 @@
     "redirects": [
         { 
             "source": "/", 
-            "destination": "/api/login", 
+            "destination": "/api/landing", 
             "statusCode": 301 
         }
     ]

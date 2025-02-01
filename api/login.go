@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,7 +11,6 @@ import (
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	redirectURI := os.Getenv("REDIRECT_URI")
-	log.Printf("REDIRECT_URI=%s", redirectURI)
 
 	authURL := fmt.Sprintf(
 		"https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=%s&scope=%s",
