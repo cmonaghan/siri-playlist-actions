@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -11,7 +12,8 @@ import (
 
 var redisPool *redis.Pool
 
-func InitRedis(redisURL string) {
+func InitRedis() (*redis.Pool, error) {
+	redisURL := os.Getenv("KV_URL")
 	if redisURL == "" {
 		log.Fatal("❌ KV_URL environment variable is not set")
 	}
@@ -29,15 +31,7 @@ func InitRedis(redisURL string) {
 		},
 	}
 
-	// Test connection
-	conn := redisPool.Get()
-	defer conn.Close()
-	_, err := conn.Do("PING")
-	if err != nil {
-		log.Fatalf("❌ Redis PING failed: %v", err)
-	}
-
-	log.Println("✅ Redis connected successfully!")
+	return redisPool, nil
 }
 
 // Stores API key and token data

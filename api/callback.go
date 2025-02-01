@@ -3,18 +3,16 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"siri-playlist-actions/utils"
-
-	"github.com/gomodule/redigo/redis"
 )
-
-var redisPool *redis.Pool
 
 // Handler for /api/callback
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	redisURL := os.Getenv("KV_URL")
-	utils.InitRedis(redisURL)
+	redisPool, err := utils.InitRedis()
+	if err != nil {
+		http.Error(w, "Error connecting to database", http.StatusInternalServerError)
+		return
+	}
 	defer redisPool.Close()
 
 	code := r.URL.Query().Get("code")
