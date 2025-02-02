@@ -71,7 +71,7 @@ Endpoint: `/api/revoke`
 
 ## Deploy
 
-To prod:
+Every push to the `main` branch triggers a new prod deploy, however if you want to deploy manually:
 
     vercel deploy --prod
 
