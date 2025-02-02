@@ -16,13 +16,6 @@ const (
 )
 
 func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string, string, error) {
-	// Make the API request with the stored access token
-	songID, songName, artistName, playlistID, playlistName, err := fetchCurrentlyPlayingSong(accessToken)
-
-	return songID, songName, artistName, playlistID, playlistName, err
-}
-
-func fetchCurrentlyPlayingSong(accessToken string) (string, string, string, string, string, error) {
 	req, err := http.NewRequest("GET", SpotifyAPIBaseURL+"/me/player/currently-playing", nil)
 	if err != nil {
 		return "", "", "", "", "", err
@@ -36,26 +29,33 @@ func fetchCurrentlyPlayingSong(accessToken string) (string, string, string, stri
 	}
 	defer resp.Body.Close()
 
+	// Handle HTTP 204 - No Content (no song playing)
+	if resp.StatusCode == 204 {
+		return "", "", "", "", "", nil // No error, just no song playing
+	}
+
+	// Read response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", "", "", "", err
 	}
 
-	// Check if the response has an error
+	// Handle non-200 errors
 	if resp.StatusCode != 200 {
-		// Try to parse Spotify's error message
 		var errData struct {
 			Error struct {
 				Status  int    `json:"status"`
 				Message string `json:"message"`
 			} `json:"error"`
 		}
+
+		// Try to parse Spotify's error message
 		if json.Unmarshal(body, &errData) == nil {
-			return "", "", "", "", "", fmt.Errorf("Spotify API error: %s", errData.Error.Message)
+			return "", "", "", "", "", fmt.Errorf("spotify API error: %s", errData.Error.Message)
 		}
 
-		// If no JSON error message, return raw response
-		return "", "", "", "", "", fmt.Errorf("Spotify API request failed: %s", body)
+		// If parsing fails, return raw response
+		return "", "", "", "", "", fmt.Errorf("spotify API request failed: %s", body)
 	}
 
 	// Parse JSON response

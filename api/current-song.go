@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
@@ -30,9 +29,12 @@ func CurrentSongHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, songName, artistName, _, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
+	songID, songName, artistName, _, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
+	if songID == "" {
+		http.Error(w, "No song is currently playing", http.StatusNotFound)
+		return
+	}
 	if err != nil {
-		log.Println(err)
 		http.Error(w, fmt.Sprintf("Error getting currently playing song: %s", err), http.StatusInternalServerError)
 		return
 	}
