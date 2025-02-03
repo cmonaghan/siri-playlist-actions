@@ -22,6 +22,7 @@ func LandingHandler(w http.ResponseWriter, r *http.Request) {
 					margin: 0;
 					padding: 0;
 					display: flex;
+					flex-direction: column;
 					justify-content: center;
 					align-items: center;
 					height: 100vh;
@@ -57,6 +58,20 @@ func LandingHandler(w http.ResponseWriter, r *http.Request) {
 				.get-started:hover {
 					background-color: #0056b3;
 				}
+				.github-link {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					margin-top: 20px;
+					text-decoration: none;
+					color: #333;
+					font-size: 16px;
+				}
+				.github-link img {
+					width: 20px;
+					height: 20px;
+					margin-right: 8px;
+				}
 			</style>
 		</head>
 		<body>
@@ -67,6 +82,12 @@ func LandingHandler(w http.ResponseWriter, r *http.Request) {
 				<p>To get started, connect Siri to your Spotify account:</p>
 				<a class="get-started" href="/api/login">Connect to Spotify</a>
 			</div>
+
+			<!-- GitHub Project Link BELOW the container -->
+			<a class="github-link" href="https://github.com/cmonaghan/siri-playlist-actions" target="_blank">
+				<img src="/static/github-favicon.png" alt="GitHub Logo">
+				See this project on GitHub
+			</a>
 		</body>
 		</html>
 	`
