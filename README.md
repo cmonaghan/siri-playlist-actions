@@ -11,15 +11,29 @@ Custom siri actions to interact with the current Spotify song or playlist
 
 ![landing page](./readme-images/landing.png)
 ![spotify login](./readme-images/spotify-login.png)
+![setup page](./readme-images/setup.png)
 ![add song apple shortcut](./static/add-song.png)
 
+## Code structure
 
-## Set up with your own Spotify developer credentials
+All the magic happens in `api/` and `utils/`.
 
-1. Follow the Spotify Developer Getting Started guide at https://developer.spotify.com/documentation/web-api to create your own developer credentials
-2. Fork this repo
-3. Setup a free account with Vercel for serverless deployments
-4. Through the Vercel marketplace, setup a free Redis data store with Upstash
+The order of API endpoints triggered in a user flow is:
+
+### Initial setup
+1. `api/landing.go` - a simple static HTML landing page
+2. `api/login.go` - redirects the user to the spotify auth page
+3. `api/callback.go` - receives a callback from spotify that includes a code we can then exchange for an auth token
+4. `api/setup.go` - a static html page with instructions on how to setup Apple shortcuts
+
+### Regular usage
+These can be used in any order
+* `api/current-song.go`
+* `api/add-song.go`
+* `api/remove-song.go`
+
+### Revoke
+* `api/revoke.go`
 
 
 ## Local Development
@@ -76,3 +90,11 @@ Every push to the `main` branch triggers a new prod deploy, however if you want 
     vercel deploy --prod
 
 Note that a redeployment is necessary after changing environment variables.
+
+
+## Set up your own Spotify developer credentials
+
+1. Follow the Spotify Developer Getting Started guide at https://developer.spotify.com/documentation/web-api to create your own developer credentials
+2. Fork this repo
+3. Setup a free account with Vercel for serverless deployments
+4. Through the Vercel marketplace, setup a free Redis data store with Upstash
