@@ -3,7 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -35,7 +35,7 @@ func GetCurrentlyPlayingSong(accessToken string) (string, string, string, string
 	}
 
 	// Read response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", "", "", "", "", err
 	}
@@ -123,7 +123,7 @@ func GetPlaylistName(accessToken, playlistID string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("failed to retrieve playlist name: %s", body)
 	}
 
@@ -166,7 +166,7 @@ func AddSongToPlaylist(accessToken, playlistID, songID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 201 {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to add song to playlist: %s", body)
 	}
 
@@ -204,8 +204,33 @@ func RemoveSongFromPlaylist(accessToken, playlistID, songID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to remove song from playlist: %s", body)
+	}
+
+	return nil
+}
+
+func SkipSong(accessToken string) error {
+	url := fmt.Sprintf("%s/me/player/next", SpotifyAPIBaseURL)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Failed to skip song: %s", body)
 	}
 
 	return nil
@@ -228,7 +253,7 @@ func IsPlaylistOwnedByUser(accessToken, playlistID string) (bool, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return false, fmt.Errorf("failed to retrieve playlist details: %s", body)
 	}
 
@@ -269,7 +294,7 @@ func IsSongInPlaylist(accessToken, playlistID, songID string) (bool, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return false, fmt.Errorf("failed to retrieve playlist tracks: %s", body)
 	}
 

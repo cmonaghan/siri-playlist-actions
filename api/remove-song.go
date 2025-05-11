@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
@@ -50,7 +51,8 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if the user owns the playlist
 	isOwner, err := utils.IsPlaylistOwnedByUser(userAuthData.AccessToken, playlistID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error checking playlist ownership: %s", err), http.StatusInternalServerError)
+		log.Print(err)
+		http.Error(w, "Error checking playlist ownership", http.StatusInternalServerError)
 		return
 	}
 	if !isOwner {
@@ -65,8 +67,13 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error removing song from playlist: %s", err), http.StatusInternalServerError)
 		return
 	}
+	err = utils.SkipSong(userAuthData.AccessToken)
+	if err != nil {
+		log.Printf("Failed to skip song with error: %s", err)
+		// continue
+	}
 
 	// Success response
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("This song was removed from your playlist %s", playlistName)))
+	w.Write([]byte(fmt.Sprintf("Song removed from %s", playlistName)))
 }
