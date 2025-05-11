@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
@@ -45,6 +46,8 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 
 	songID, songName, _, _, _, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil || songID == "" {
+		log.Printf("Error: songId=%s, songName=%s", songID, songName)
+		log.Print(err)
 		http.Error(w, "No song is currently playing", http.StatusNotFound)
 		return
 	}
@@ -65,7 +68,7 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 
 	if isInPlaylist {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("This song is already in your playlist '%s', so we skipped adding a duplicate.", destinationPlaylistName)))
+		w.Write([]byte(fmt.Sprintf("This song is already in your playlist %s", destinationPlaylistName)))
 		return
 	}
 
@@ -77,5 +80,5 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("The song '%s' was added to your playlist '%s'", songName, destinationPlaylistName)))
+	w.Write([]byte(fmt.Sprintf("Song added to %s", destinationPlaylistName)))
 }
