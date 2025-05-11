@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"siri-playlist-actions/utils"
 )
@@ -24,14 +25,16 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Exchange code for token
 	token, err := utils.ExchangeCodeForToken(code)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error exchanging code for token: %v", err), http.StatusInternalServerError)
+		log.Print(err)
+		http.Error(w, "Error exchanging code for token", http.StatusInternalServerError)
 		return
 	}
 
 	// Fetch user ID
 	userID, err := utils.GetSpotifyUserID(token.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error fetching Spotify user ID: %v", err), http.StatusInternalServerError)
+		log.Print(err)
+		http.Error(w, "Error fetching Spotify user ID", http.StatusInternalServerError)
 		return
 	}
 

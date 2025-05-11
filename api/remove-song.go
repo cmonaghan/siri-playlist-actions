@@ -34,7 +34,8 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	// Get currently playing song
 	songID, _, _, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error retrieving currently playing song: %s", err), http.StatusInternalServerError)
+		log.Print(err)
+		http.Error(w, "Error retrieving currently playing song", http.StatusInternalServerError)
 		return
 	}
 
@@ -64,7 +65,8 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	// Remove the song from the playlist
 	err = utils.RemoveSongFromPlaylist(userAuthData.AccessToken, playlistID, songID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error removing song from playlist: %s", err), http.StatusInternalServerError)
+		log.Print(err)
+		http.Error(w, "Error removing song from playlist", http.StatusInternalServerError)
 		return
 	}
 	err = utils.SkipSong(userAuthData.AccessToken)
