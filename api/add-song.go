@@ -62,7 +62,7 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if the song is already in the playlist
 	isInPlaylist, err := utils.IsSongInPlaylist(userAuthData.AccessToken, destinationPlaylistID, songID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error checking playlist: %s", err), http.StatusInternalServerError)
+		http.Error(w, "Error checking whether song already exists in playlist", http.StatusInternalServerError)
 		return
 	}
 
@@ -75,7 +75,9 @@ func AddSongHandler(w http.ResponseWriter, r *http.Request) {
 	// Add song to playlist
 	err = utils.AddSongToPlaylist(userAuthData.AccessToken, destinationPlaylistID, songID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error adding song: %s", err), http.StatusInternalServerError)
+		log.Print(err)
+		msg := err.Error()
+		http.Error(w, fmt.Sprintf("Error adding song: %s", msg), http.StatusInternalServerError)
 		return
 	}
 
