@@ -107,16 +107,16 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 			<h3>Shortcut 1: Add song to a designated playlist</h3>
 			<p>This shortcut allows you to add a song to a pre-designated playlist via a Siri voice command. For example, imagine you have a playlist called "Hot Stuff." Setting up this shortcut would allow you to add songs to this playlist via a Siri voice command, such as when you have your hands full while driving, or cooking, or while juggling way too many flaming bowling pins.</p>
 			<ol>
-				<li>Play a song from the playlist you wish to add songs to, then refresh this page.</li>
+				<li>Play a song from the playlist you wish to add songs to, then refresh this page</li>
 				<li>Open the Shortcuts app on your iPhone or macbook (setting the shortcut up on one will mirror to the other). These instructions assume iPhone.</li>
-				<li>Tap "+" in the upper right.</li>
-				<li>Search for "Get Contents of URL".</li>
-				<li>Set the URL to <code>https://spotify.woolgathering.io/api/add-song</code>.</li>
-				<li>Set "Method" to "POST".</li>
+				<li>Tap "+" in the upper right</li>
+				<li>Search for "Get Contents of URL"</li>
+				<li>Set the URL to <code>https://spotify.woolgathering.io/api/add-song</code></li>
+				<li>Set "Method" to "POST"</li>
 				<li>Set "Headers" to Key: <code>X-API-Key</code> and Text: <code>{{.APIKey}}</code></li>
 				<li>Set "Request Body" to "JSON"</li>
 				<li>Key: <code>playlist_id</code>, Type: <code>Text</code>, Text: <code>{{.PlaylistID}}</code></li>
-				<li>Set the title of the shortcut to "Add song to playlist" or whatever Siri command you want to say to trigger the shortcut.</li>
+				<li>Set the title of the shortcut to "Add song to playlist" or whatever Siri command you want to say to trigger the shortcut</li>
 				<li>All done! Try it out by speaking your voice command to Siri.</li>
 			</ol>
 			
