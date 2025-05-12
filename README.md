@@ -98,3 +98,13 @@ Note that a redeployment is necessary after changing environment variables.
 2. Fork this repo
 3. Setup a free account with Vercel for serverless deployments
 4. Through the Vercel marketplace, setup a free Redis data store with Upstash
+
+## Running Unit Tests
+
+This project uses Go's built-in testing framework. To run all unit tests, use:
+
+```
+go test ./...
+```
+
+Test files are located alongside the code in the `api/` and `utils/` directories, following the Go convention of using `_test.go` suffix.

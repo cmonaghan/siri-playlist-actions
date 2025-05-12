@@ -56,8 +56,12 @@ func SetAPIKeyToUserAuthData(apiKey string, token *SpotifyAccessToken, userID st
 }
 
 // Retrieves token data using API key
-func GetAPIKeyToUserAuthData(apiKey string) (*UserAuthData, error) {
-	conn := redisPool.Get()
+func GetAPIKeyToUserAuthData(
+	apiKey string,
+	conn redis.Conn,
+	refreshFn func(refreshToken string) (*SpotifyAccessToken, error),
+	setFn func(apiKey string, token *SpotifyAccessToken, userID string) error,
+) (*UserAuthData, error) {
 	defer conn.Close()
 
 	// Retrieve token data from Redis
@@ -81,7 +85,7 @@ func GetAPIKeyToUserAuthData(apiKey string) (*UserAuthData, error) {
 		log.Println("🔄 Access token expired, refreshing...")
 
 		// Refresh the token
-		newToken, err := RefreshSpotifyToken(userAuthData.RefreshToken)
+		newToken, err := refreshFn(userAuthData.RefreshToken)
 		if err != nil {
 			return nil, fmt.Errorf("failed to refresh token: %v", err)
 		}
@@ -89,7 +93,7 @@ func GetAPIKeyToUserAuthData(apiKey string) (*UserAuthData, error) {
 		newToken.RefreshToken = userAuthData.RefreshToken
 
 		// Save updated token data in Redis
-		err = SetAPIKeyToUserAuthData(apiKey, newToken, userAuthData.UserID)
+		err = setFn(apiKey, newToken, userAuthData.UserID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update token in Redis: %v", err)
 		}

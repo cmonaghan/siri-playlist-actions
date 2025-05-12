@@ -25,7 +25,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	defer redisPool.Close()
 
 	// Retrieve token data from Redis
-	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, utils.SetAPIKeyToUserAuthData)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
@@ -53,7 +53,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	isOwner, err := utils.IsPlaylistOwnedByUser(userAuthData.AccessToken, playlistID)
 	if err != nil {
 		log.Print(err)
-		http.Error(w, "Error checking playlist ownership", http.StatusInternalServerError)
+		http.Error(w, "Error checking playlist ownership. Do you own this playlist?", http.StatusInternalServerError)
 		return
 	}
 	if !isOwner {

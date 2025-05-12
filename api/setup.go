@@ -23,7 +23,7 @@ func SetupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey)
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, utils.SetAPIKeyToUserAuthData)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid API Key: %s", err), http.StatusUnauthorized)
 		return
