@@ -94,3 +94,34 @@ func TestGetAPIKeyToUserAuthData_ExpiredTokenRefresh(t *testing.T) {
 	assert.Equal(t, "user-123", result.UserID)
 	assert.True(t, result.ExpiresAt.After(time.Now()))
 }
+
+func TestGetUserIDToAPIKey_Success(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{"user:user-123": []byte("api-key-abc")}}
+	apiKey, err := GetUserIDToAPIKey("user-123", mock)
+	assert.NoError(t, err)
+	assert.Equal(t, "api-key-abc", apiKey)
+}
+
+func TestGetUserIDToAPIKey_NotFound(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{}}
+	apiKey, err := GetUserIDToAPIKey("user-unknown", mock)
+	assert.NoError(t, err)
+	assert.Equal(t, "", apiKey)
+}
+
+func TestGetUserIDToAPIKey_RedisError(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{}}
+	// Simulate error by wrapping mockConn.Do
+	errConn := &errorConn{mockConn: mock}
+	_, err := GetUserIDToAPIKey("user-err", errConn)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to retrieve API key by user ID")
+}
+
+type errorConn struct {
+	*mockConn
+}
+
+func (e *errorConn) Do(commandName string, args ...interface{}) (reply interface{}, err error) {
+	return nil, fmt.Errorf("redis error")
+}

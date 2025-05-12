@@ -39,7 +39,7 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user already has an API key
-	apiKey, err := utils.GetUserIDToAPIKey(userID)
+	apiKey, err := utils.GetUserIDToAPIKey(userID, redisPool.Get())
 	if err != nil {
 		http.Error(w, "Error checking API key", http.StatusInternalServerError)
 		return

@@ -123,8 +123,7 @@ func SetUserIDToAPIKey(userID, apiKey string) error {
 }
 
 // Retrieves API key using user ID
-func GetUserIDToAPIKey(userID string) (string, error) {
-	conn := redisPool.Get()
+func GetUserIDToAPIKey(userID string, conn redis.Conn) (string, error) {
 	defer conn.Close()
 
 	apiKey, err := redis.String(conn.Do("GET", fmt.Sprintf("user:%s", userID)))
