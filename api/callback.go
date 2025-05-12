@@ -50,14 +50,14 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		apiKey = utils.GenerateAPIKey()
 
 		// Store token in Redis
-		err = utils.SetAPIKeyToUserAuthData(apiKey, token, userID)
+		err = utils.SetAPIKeyToUserAuthData(apiKey, token, userID, redisPool.Get())
 		if err != nil {
 			http.Error(w, "Failed to store API key", http.StatusInternalServerError)
 			return
 		}
 
 		// Map user ID to API key
-		err = utils.SetUserIDToAPIKey(userID, apiKey)
+		err = utils.SetUserIDToAPIKey(userID, apiKey, redisPool.Get())
 		if err != nil {
 			http.Error(w, "Failed to map user ID", http.StatusInternalServerError)
 			return

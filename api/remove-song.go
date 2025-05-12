@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"siri-playlist-actions/utils"
@@ -24,8 +23,10 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	// Retrieve token data from Redis
-	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, utils.SetAPIKeyToUserAuthData)
+	setFn := func(apiKey string, token *utils.SpotifyAccessToken, userID string) error {
+		return utils.SetAPIKeyToUserAuthData(apiKey, token, userID, redisPool.Get())
+	}
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, setFn)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
@@ -77,5 +78,5 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Success response
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Song removed from %s", playlistName)))
+	w.Write([]byte("Song removed"))
 }

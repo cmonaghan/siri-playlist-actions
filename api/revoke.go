@@ -22,22 +22,24 @@ func RevokeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	// Retrieve the user ID associated with the API key
-	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, utils.SetAPIKeyToUserAuthData)
+	setFn := func(apiKey string, token *utils.SpotifyAccessToken, userID string) error {
+		return utils.SetAPIKeyToUserAuthData(apiKey, token, userID, redisPool.Get())
+	}
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, setFn)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return
 	}
 
 	// Delete the API key from Redis
-	err = utils.DeleteAPIKey(apiKey)
+	err = utils.DeleteAPIKey(apiKey, redisPool.Get())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error revoking session: %s", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Remove the user-to-API key mapping
-	err = utils.DeleteUserID(userAuthData.UserID)
+	err = utils.DeleteUserID(userAuthData.UserID, redisPool.Get())
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error removing user session: %s", err), http.StatusInternalServerError)
 		return

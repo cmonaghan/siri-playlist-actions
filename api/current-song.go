@@ -23,7 +23,10 @@ func CurrentSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer redisPool.Close()
 
-	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, utils.SetAPIKeyToUserAuthData)
+	setFn := func(apiKey string, token *utils.SpotifyAccessToken, userID string) error {
+		return utils.SetAPIKeyToUserAuthData(apiKey, token, userID, redisPool.Get())
+	}
+	userAuthData, err := utils.GetAPIKeyToUserAuthData(apiKey, redisPool.Get(), utils.RefreshSpotifyToken, setFn)
 	if err != nil {
 		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
 		return

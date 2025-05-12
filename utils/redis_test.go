@@ -36,6 +36,11 @@ func (m *mockConn) Do(commandName string, args ...interface{}) (reply interface{
 		}
 		return nil, nil
 	}
+	if commandName == "DEL" {
+		key := fmt.Sprintf("%v", args[0])
+		delete(m.data, key)
+		return nil, nil
+	}
 	return nil, nil
 }
 func (m *mockConn) Close() error                      { return nil }
@@ -124,4 +129,71 @@ type errorConn struct {
 
 func (e *errorConn) Do(commandName string, args ...interface{}) (reply interface{}, err error) {
 	return nil, fmt.Errorf("redis error")
+}
+
+func TestDeleteAPIKey_Success(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{"apiKey:test-key": []byte("value")}}
+	err := DeleteAPIKey("test-key", mock)
+	assert.NoError(t, err)
+	_, exists := mock.data["apiKey:test-key"]
+	assert.False(t, exists)
+}
+
+func TestDeleteAPIKey_RedisError(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{"apiKey:test-key": []byte("value")}}
+	errConn := &errorConn{mockConn: mock}
+	err := DeleteAPIKey("test-key", errConn)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to delete API key")
+}
+
+func TestSetAPIKeyToUserAuthData_Success(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{}}
+	token := &SpotifyAccessToken{AccessToken: "token", RefreshToken: "refresh"}
+	err := SetAPIKeyToUserAuthData("api-key", token, "user-1", mock)
+	assert.NoError(t, err)
+	stored, ok := mock.data["apiKey:api-key"]
+	assert.True(t, ok)
+	var auth UserAuthData
+	err = json.Unmarshal(stored, &auth)
+	assert.NoError(t, err)
+	assert.Equal(t, "token", auth.AccessToken)
+	assert.Equal(t, "refresh", auth.RefreshToken)
+	assert.Equal(t, "user-1", auth.UserID)
+}
+
+func TestSetAPIKeyToUserAuthData_Error(t *testing.T) {
+	errConn := &errorConn{mockConn: &mockConn{data: map[string][]byte{}}}
+	token := &SpotifyAccessToken{AccessToken: "token", RefreshToken: "refresh"}
+	err := SetAPIKeyToUserAuthData("api-key", token, "user-1", errConn)
+	assert.Error(t, err)
+}
+
+func TestSetUserIDToAPIKey_Success(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{}}
+	err := SetUserIDToAPIKey("user-1", "api-key", mock)
+	assert.NoError(t, err)
+	val, ok := mock.data["user:user-1"]
+	assert.True(t, ok)
+	assert.Equal(t, []byte("api-key"), val)
+}
+
+func TestSetUserIDToAPIKey_Error(t *testing.T) {
+	errConn := &errorConn{mockConn: &mockConn{data: map[string][]byte{}}}
+	err := SetUserIDToAPIKey("user-1", "api-key", errConn)
+	assert.Error(t, err)
+}
+
+func TestDeleteUserID_Success(t *testing.T) {
+	mock := &mockConn{data: map[string][]byte{"user:user-1": []byte("api-key")}}
+	err := DeleteUserID("user-1", mock)
+	assert.NoError(t, err)
+	_, ok := mock.data["user:user-1"]
+	assert.False(t, ok)
+}
+
+func TestDeleteUserID_Error(t *testing.T) {
+	errConn := &errorConn{mockConn: &mockConn{data: map[string][]byte{"user:user-1": []byte("api-key")}}}
+	err := DeleteUserID("user-1", errConn)
+	assert.Error(t, err)
 }

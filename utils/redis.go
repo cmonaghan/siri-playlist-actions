@@ -35,8 +35,7 @@ func InitRedis() (*redis.Pool, error) {
 }
 
 // Stores API key and token data
-func SetAPIKeyToUserAuthData(apiKey string, token *SpotifyAccessToken, userID string) error {
-	conn := redisPool.Get()
+func SetAPIKeyToUserAuthData(apiKey string, token *SpotifyAccessToken, userID string, conn redis.Conn) error {
 	defer conn.Close()
 
 	userAuthData := UserAuthData{
@@ -114,8 +113,7 @@ func GetAPIKeyToUserAuthData(
 }
 
 // Maps user ID to API key
-func SetUserIDToAPIKey(userID, apiKey string) error {
-	conn := redisPool.Get()
+func SetUserIDToAPIKey(userID, apiKey string, conn redis.Conn) error {
 	defer conn.Close()
 
 	_, err := conn.Do("SET", fmt.Sprintf("user:%s", userID), apiKey)
@@ -138,8 +136,7 @@ func GetUserIDToAPIKey(userID string, conn redis.Conn) (string, error) {
 }
 
 // DeleteAPIKey removes the API key from Redis
-func DeleteAPIKey(apiKey string) error {
-	conn := redisPool.Get()
+func DeleteAPIKey(apiKey string, conn redis.Conn) error {
 	defer conn.Close()
 
 	_, err := conn.Do("DEL", fmt.Sprintf("apiKey:%s", apiKey))
@@ -151,8 +148,7 @@ func DeleteAPIKey(apiKey string) error {
 }
 
 // DeleteUserID removes the user-to-API key mapping
-func DeleteUserID(userID string) error {
-	conn := redisPool.Get()
+func DeleteUserID(userID string, conn redis.Conn) error {
 	defer conn.Close()
 
 	_, err := conn.Do("DEL", fmt.Sprintf("user:%s", userID))
