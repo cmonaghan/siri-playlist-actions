@@ -33,7 +33,7 @@ func RemoveSongHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get currently playing song
-	songID, _, _, playlistID, playlistName, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
+	songID, _, _, playlistID, _, err := utils.GetCurrentlyPlayingSong(userAuthData.AccessToken)
 	if err != nil {
 		log.Print(err)
 		http.Error(w, "Error retrieving currently playing song", http.StatusInternalServerError)
