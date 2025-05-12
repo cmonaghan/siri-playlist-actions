@@ -93,6 +93,16 @@ func GetAPIKeyToUserAuthData(apiKey string) (*UserAuthData, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to update token in Redis: %v", err)
 		}
+
+		// RELOAD the updated token data
+		data, err = redis.Bytes(conn.Do("GET", fmt.Sprintf("apiKey:%s", apiKey)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve updated API key from Redis: %v", err)
+		}
+		err = json.Unmarshal(data, &userAuthData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal updated token data: %v", err)
+		}
 	}
 
 	// Return valid token data
